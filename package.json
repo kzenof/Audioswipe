@@ -10,7 +10,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "deploy": "wrangler deploy --no-autoconfig"
+    "deploy": "wrangler deploy"
   },
   "overrides": {
     "vite": "6.4.3"
