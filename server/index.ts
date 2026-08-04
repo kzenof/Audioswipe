@@ -9,7 +9,12 @@ import {
   requireAuth,
 } from './auth.js'
 import { addToBlacklist, listBlacklist } from './blacklist.js'
-import { checkDbConnection, query } from './db.js'
+import {
+  checkDbConnection,
+  DbUnavailableError,
+  getLastDbError,
+  query,
+} from './db.js'
 
 const app = express()
 const PORT = Number(process.env.PORT ?? 3001)
@@ -44,41 +49,64 @@ app.get('/api/health', async (_req, res) => {
   } catch {
     db = false
   }
-  res.json({ ok: true, service: 'audioswipe-api', db })
+  res.json({
+    ok: true,
+    service: 'audioswipe-api',
+    db,
+    ...(db ? {} : { hint: getLastDbError() ?? 'DB connection failed' }),
+  })
 })
 
 app.post('/api/auth/register', async (req, res) => {
-  const login = String(req.body?.login ?? req.body?.email ?? '')
-  const { password, role, artistName, mainRole, dawSoftware, statusTag } = req.body ?? {}
-  if (role !== 'listener' && role !== 'artist') {
-    res.status(400).json({ error: 'role: listener | artist' })
-    return
+  try {
+    const login = String(req.body?.login ?? req.body?.email ?? '')
+    const { password, role, artistName, mainRole, dawSoftware, statusTag } = req.body ?? {}
+    if (role !== 'listener' && role !== 'artist') {
+      res.status(400).json({ error: 'role: listener | artist' })
+      return
+    }
+    const result = await registerUser({
+      login,
+      password: String(password ?? ''),
+      role,
+      artistName,
+      mainRole,
+      dawSoftware,
+      statusTag,
+    })
+    if (!result.ok) {
+      res.status(400).json({ error: result.error })
+      return
+    }
+    res.status(201).json({ token: result.token, user: publicUser(result.user) })
+  } catch (e) {
+    if (e instanceof DbUnavailableError) {
+      res.status(503).json({ error: 'База данных недоступна. Проверь DATABASE_URL на Render.' })
+      return
+    }
+    console.error(e)
+    res.status(500).json({ error: 'Ошибка сервера' })
   }
-  const result = await registerUser({
-    login,
-    password: String(password ?? ''),
-    role,
-    artistName,
-    mainRole,
-    dawSoftware,
-    statusTag,
-  })
-  if (!result.ok) {
-    res.status(400).json({ error: result.error })
-    return
-  }
-  res.status(201).json({ token: result.token, user: publicUser(result.user) })
 })
 
 app.post('/api/auth/login', async (req, res) => {
-  const login = String(req.body?.login ?? req.body?.email ?? '')
-  const password = String(req.body?.password ?? '')
-  const result = await loginUser(login, password)
-  if (!result.ok) {
-    res.status(401).json({ error: result.error })
-    return
+  try {
+    const login = String(req.body?.login ?? req.body?.email ?? '')
+    const password = String(req.body?.password ?? '')
+    const result = await loginUser(login, password)
+    if (!result.ok) {
+      res.status(401).json({ error: result.error })
+      return
+    }
+    res.json({ token: result.token, user: publicUser(result.user) })
+  } catch (e) {
+    if (e instanceof DbUnavailableError) {
+      res.status(503).json({ error: 'База данных недоступна. Проверь DATABASE_URL на Render.' })
+      return
+    }
+    console.error(e)
+    res.status(500).json({ error: 'Ошибка сервера' })
   }
-  res.json({ token: result.token, user: publicUser(result.user) })
 })
 
 app.get('/api/auth/me', async (req, res) => {
