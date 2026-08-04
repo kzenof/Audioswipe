@@ -14,7 +14,28 @@ import { checkDbConnection } from './db.js'
 const app = express()
 const PORT = Number(process.env.PORT ?? 3001)
 
-app.use(cors({ origin: true, credentials: true }))
+const allowedOrigins = [
+  'https://audioswipe.vercel.app',
+  'http://localhost:5173',
+  process.env.CORS_ORIGIN,
+].filter(Boolean) as string[]
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app')
+      ) {
+        callback(null, true)
+      } else {
+        callback(new Error('Not allowed by CORS'))
+      }
+    },
+    credentials: true,
+  }),
+)
 app.use(express.json())
 
 app.get('/api/health', (_req, res) => {
