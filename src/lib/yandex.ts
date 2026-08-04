@@ -136,7 +136,7 @@ function isYcFunctionsDirect(base: string) {
   return /functions\.yandexcloud\.net/i.test(base)
 }
 
-async function ymGet<T>(path: string, timeoutMs = 8000): Promise<T> {
+async function ymGet<T>(path: string, timeoutMs = 20_000): Promise<T> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   const base = ymProxyBase()
@@ -153,13 +153,26 @@ async function ymGet<T>(path: string, timeoutMs = 8000): Promise<T> {
       },
       signal: ctrl.signal,
     })
-    if (res.status === 451) {
+    const text = await res.text()
+    if (res.status === 451 || /Unavailable For Legal Reasons/i.test(text)) {
       throw new Error(
         'Яндекс недоступен с серверов за рубежом (451). Нужен прокси в РФ — см. VITE_YM_BASE',
       )
     }
+    if (
+      res.status === 403 ||
+      /temporarily blocked|доступ временно заблокирован|smart-captcha/i.test(text)
+    ) {
+      throw new Error(
+        'Яндекс временно заблокировал прокси (403). Подожди 30–60 мин и попробуй снова',
+      )
+    }
     if (!res.ok) throw new Error(`Yandex API ${res.status}: ${path}`)
-    return (await res.json()) as T
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      throw new Error(`Yandex API bad JSON: ${path}`)
+    }
   } finally {
     clearTimeout(timer)
   }
@@ -168,7 +181,7 @@ async function ymGet<T>(path: string, timeoutMs = 8000): Promise<T> {
 export async function fetchArtistMonthListeners(artistId: string): Promise<number> {
   if (listenersCache.has(artistId)) return listenersCache.get(artistId)!
   try {
-    const data = await ymGet<YmBriefInfo>(`/artists/${artistId}/brief-info`, 6000)
+    const data = await ymGet<YmBriefInfo>(`/artists/${artistId}/brief-info`, 12_000)
     const n = Number(data.result?.stats?.lastMonthListeners ?? 0)
     const safe = Number.isFinite(n) ? n : 0
     listenersCache.set(artistId, safe)
@@ -200,7 +213,7 @@ async function filterByTier(
 ): Promise<Track[]> {
   const out: Track[] = []
   const seen = new Set<string>()
-  const concurrency = 6
+  const concurrency = 3
   let i = 0
 
   while (i < candidates.length && out.length < limit) {
@@ -227,7 +240,7 @@ export async function searchYandexTracks(
     const q = encodeURIComponent(text)
     const data = await ymGet<YmSearchResponse>(
       `/search?text=${q}&type=track&page=${page}&pageSize=20`,
-      10000,
+      20_000,
     )
     return data.result?.tracks?.results ?? []
   } catch (e) {
@@ -237,7 +250,7 @@ export async function searchYandexTracks(
 }
 
 export async function fetchYandexChartTracks(): Promise<YmTrack[]> {
-  const data = await ymGet<YmChartResponse>('/landing3/chart', 12000)
+  const data = await ymGet<YmChartResponse>('/landing3/chart', 25_000)
   return (data.result?.chart?.tracks ?? [])
     .map((row) => row.track)
     .filter((t): t is YmTrack => Boolean(t?.id))

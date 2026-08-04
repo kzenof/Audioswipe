@@ -132,6 +132,15 @@ async function proxyYmApi(ymPath, query) {
       message: 'Unexpected 451 from Yandex inside RU cloud — check function region',
     })
   }
+  if (
+    upstream.status === 403 ||
+    /temporarily blocked|доступ временно заблокирован|smart-captcha/i.test(text)
+  ) {
+    return json(403, {
+      error: 'yandex_rate_blocked',
+      message: 'Yandex temporarily blocked this proxy IP (403 captcha)',
+    })
+  }
   return {
     statusCode: upstream.status,
     headers: {

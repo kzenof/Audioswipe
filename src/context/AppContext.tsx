@@ -681,14 +681,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const msg = e instanceof Error ? e.message : String(e)
       setNotifications((n) => [
         `Радар: ${
-          msg.includes('451') || msg.includes('за рубежом')
-            ? 'Яндекс блокирует зарубежные сервера — нужен прокси в РФ'
-            : msg.includes('кандидат') ||
-                msg.includes('abort') ||
-                msg.includes('ETIMEDOUT') ||
-                msg.includes('502')
-              ? 'Сервис не ответил вовремя — попробуй ещё раз или смени фильтр'
-              : msg
+          msg.includes('403') || msg.includes('заблокировал')
+            ? 'Яндекс временно заблокировал прокси — подожди 30–60 мин'
+            : msg.includes('451') || msg.includes('за рубежом')
+              ? 'Яндекс блокирует зарубежные сервера — нужен прокси в РФ'
+              : msg.includes('кандидат') ||
+                  msg.includes('abort') ||
+                  msg.includes('ETIMEDOUT') ||
+                  msg.includes('502')
+                ? 'Сервис не ответил вовремя — попробуй ещё раз или смени фильтр'
+                : msg
         }`,
         ...n,
       ])
