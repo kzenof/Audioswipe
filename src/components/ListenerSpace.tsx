@@ -4,7 +4,7 @@ import { RadarScreen } from './RadarScreen'
 import { ReportModal } from './ReportModal'
 import { EMOJI_TAGS } from '../data/mock'
 import { useApp } from '../context/AppContext'
-import { POPULARITY_LABELS } from '../types'
+import { POPULARITY_LABELS, SOCIAL_PLATFORMS, getTrackPreviewWindow } from '../types'
 import { formatListeners, yandexStreamUrl } from '../lib/yandex'
 
 type Tab = 'scout' | 'finds'
@@ -99,12 +99,24 @@ export function ListenerSpace() {
     let cancelled = false
     stopTimers()
 
-    const bindAudioProgress = (audio: HTMLAudioElement) => {
+    const bindAudioProgress = (
+      audio: HTMLAudioElement,
+      previewStart = 0,
+      clipLen = audio.duration || 1,
+    ) => {
       timerRef.current = window.setInterval(() => {
-        if (!audio.duration || !Number.isFinite(audio.duration)) return
-        const p = Math.min(1, audio.currentTime / audio.duration)
+        if (!clipLen || !Number.isFinite(clipLen)) return
+        const elapsed = Math.max(0, audio.currentTime - previewStart)
+        const p = Math.min(1, elapsed / clipLen)
         setProgress(p)
         setListenProgress(p)
+        if (audio.currentTime >= previewStart + clipLen - 0.05) {
+          audio.pause()
+          setProgress(1)
+          setListenProgress(1)
+          setPlaying(false)
+          markListenedToEnd()
+        }
       }, 50)
       audio.onended = () => {
         setProgress(1)
@@ -145,15 +157,17 @@ export function ListenerSpace() {
 
       // SoundLink / локальный файл
       if (currentTrack.audioUrl) {
+        const { start, clipLen } = getTrackPreviewWindow(currentTrack)
         const audio = new Audio(currentTrack.audioUrl)
         audioRef.current = audio
         try {
+          audio.currentTime = start
           await audio.play()
           if (cancelled) {
             audio.pause()
             return
           }
-          bindAudioProgress(audio)
+          bindAudioProgress(audio, start, clipLen)
         } catch {
           if (!cancelled) setPlaying(false)
         }
@@ -410,15 +424,15 @@ export function ListenerSpace() {
               {currentTrack.source === 'soundlink' && <> · Локальное демо</>}
             </p>
             <div className="streaming-links">
-              {currentTrack.streaming.yandex && (
-                <a
-                  href={currentTrack.streaming.yandex}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Открыть в Яндекс Музыке
-                </a>
-              )}
+              {SOCIAL_PLATFORMS.map(({ key, label }) => {
+                const href = currentTrack.streaming[key]
+                if (!href) return null
+                return (
+                  <a key={key} href={href} target="_blank" rel="noreferrer">
+                    {label}
+                  </a>
+                )
+              })}
             </div>
             <div className="reveal__actions">
               <button

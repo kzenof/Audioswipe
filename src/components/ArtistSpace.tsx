@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FIT_FEED } from '../data/mock'
 import { useApp } from '../context/AppContext'
-import type { ArtistRole, GenreTag, Soft, FitStatus } from '../types'
-import { GENRE_TAGS } from '../types'
+import type { ArtistRole, Soft, FitStatus } from '../types'
+import { ArtistSettings } from './ArtistSettings'
+import { TrackUploadPanel } from './TrackUploadPanel'
 import { RetentionChart } from './RetentionChart'
 
 const ROLES: ArtistRole[] = ['Битмейкер', 'Вокалист', 'Сонграйтер', 'Звукарь']
@@ -13,13 +14,6 @@ const STATUSES: FitStatus[] = [
   'Коммерческий заказ',
   'Открыт к фитам',
   'Не ищу коллабы',
-]
-const FOCUS_OPTIONS = [
-  'Оцените сведение',
-  'Как вам припев?',
-  'Бас достаточно плотный?',
-  'Энергия куплета ок?',
-  'Как вам атмосфера?',
 ]
 
 export function ArtistSpace() {
@@ -56,7 +50,6 @@ export function ArtistSpace() {
   const [selectedTrack, setSelectedTrack] = useState('')
   const [refTitle, setRefTitle] = useState('')
   const [refGenre, setRefGenre] = useState('')
-  const [uploadGenre, setUploadGenre] = useState<GenreTag>('Рэп')
 
   useEffect(() => {
     if (!selectedTrack && myTracks[0]) setSelectedTrack(myTracks[0].id)
@@ -136,6 +129,13 @@ export function ArtistSpace() {
           >
             Искать Фит
           </button>
+          <button
+            type="button"
+            className={artistTab === 'settings' ? 'is-active' : ''}
+            onClick={() => setArtistTab('settings')}
+          >
+            Настройки
+          </button>
         </nav>
         <div className="space-nav__user">
           <span className="user-chip">{user}</span>
@@ -150,60 +150,12 @@ export function ArtistSpace() {
 
       {artistTab === 'music' && (
         <section className="studio">
-          <div className="studio__upload">
-            <h2>Студия · {user}</h2>
-            <p>
-              Загружай демо — другие слушатели увидят их в радаре «Локальные».
-            </p>
-            {!canUpload && (
-              <p className="studio__blocked">
-                Вы заблокированы за нарушение правил. Загрузка новых треков недоступна.
-              </p>
-            )}
-            <label className="field">
-              <span>Жанр для радара</span>
-              <select
-                className="input"
-                value={uploadGenre}
-                onChange={(e) => setUploadGenre(e.target.value as GenreTag)}
-              >
-                {GENRE_TAGS.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={`upload-zone ${!canUpload ? 'is-disabled' : ''}`}>
-              <input
-                type="file"
-                accept="audio/*"
-                hidden
-                disabled={!canUpload}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) void addMyTrack(file, undefined, uploadGenre)
-                  e.target.value = ''
-                }}
-              />
-              <span className="upload-zone__plus">+</span>
-              <span>{canUpload ? 'Перетащи трек или кликни' : 'Загрузка заблокирована'}</span>
-            </label>
-            <label className="field">
-              <span>Фокус фидбека</span>
-              <select
-                className="input"
-                value={focusFeedback}
-                onChange={(e) => setFocusFeedback(e.target.value)}
-              >
-                {FOCUS_OPTIONS.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <TrackUploadPanel
+            canUpload={canUpload}
+            focusFeedback={focusFeedback}
+            onFocusFeedbackChange={setFocusFeedback}
+            onPublish={addMyTrack}
+          />
 
           <div className="studio__tracks">
             <h3>Твои релизы</h3>
@@ -220,7 +172,7 @@ export function ArtistSpace() {
                     >
                       <strong>{t.title}</strong>
                       <span>
-                        {t.genre} · Локальное
+                        {t.genre} · фрагмент с {t.previewStartSec ?? 0} сек
                       </span>
                     </button>
                   </li>
@@ -281,6 +233,8 @@ export function ArtistSpace() {
           )}
         </section>
       )}
+
+      {artistTab === 'settings' && <ArtistSettings />}
 
       {artistTab === 'fit' && (
         <section className="fit">

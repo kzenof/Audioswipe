@@ -81,6 +81,23 @@ export interface StreamingLinks {
   yandex?: string
 }
 
+export type SocialPlatform = keyof StreamingLinks
+
+export const SOCIAL_PLATFORMS: {
+  key: SocialPlatform
+  label: string
+  placeholder: string
+}[] = [
+  { key: 'spotify', label: 'Spotify', placeholder: 'https://open.spotify.com/artist/…' },
+  { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/@…' },
+  { key: 'soundcloud', label: 'SoundCloud', placeholder: 'https://soundcloud.com/…' },
+  { key: 'yandex', label: 'Яндекс Музыка', placeholder: 'https://music.yandex.ru/artist/…' },
+  { key: 'apple', label: 'Apple Music', placeholder: 'https://music.apple.com/…' },
+]
+
+/** Длина клипа в ленте по умолчанию (сек) */
+export const DEFAULT_PREVIEW_DURATION_SEC = 30
+
 export interface Track {
   id: string
   title: string
@@ -108,6 +125,10 @@ export interface Track {
   /** ID трека/альбома в Яндекс Музыке для iframe */
   yandexTrackId?: string
   yandexAlbumId?: string
+  /** С какой секунды играть фрагмент в радаре (SoundLink) */
+  previewStartSec?: number
+  /** Длина фрагмента в радаре (SoundLink) */
+  previewDurationSec?: number
 }
 
 export interface Feedback {
@@ -135,6 +156,8 @@ export interface CollabProfile {
   status: FitStatus
   references: { id: string; title: string; genre: string }[]
   bio: string
+  /** Ссылки на соцсети / стриминги артиста */
+  social: StreamingLinks
 }
 
 export interface FitCard {
@@ -167,7 +190,18 @@ export interface ChatMessage {
 
 export type ListenerPhase = 'radar' | 'roulette' | 'feedback' | 'reveal'
 export type ListenerTab = 'scout' | 'finds'
-export type ArtistTab = 'music' | 'fit'
+export type ArtistTab = 'music' | 'fit' | 'settings'
+
+export function getTrackPreviewWindow(track: Track) {
+  const duration = Math.max(1, track.duration || 40)
+  const clipLen = Math.min(
+    track.previewDurationSec ?? DEFAULT_PREVIEW_DURATION_SEC,
+    duration,
+  )
+  const maxStart = Math.max(0, duration - clipLen)
+  const start = Math.min(Math.max(0, track.previewStartSec ?? 0), maxStart)
+  return { start, clipLen, duration }
+}
 export type FitView = 'profile' | 'feed'
 
 export const GENRE_TAGS: GenreTag[] = [

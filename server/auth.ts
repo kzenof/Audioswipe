@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import bcrypt from 'bcrypt'
 import type { Response } from 'express'
 import { normLogin, query, type DbUser } from './db.js'
+import { parseSocialLinks } from './profile.js'
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'audioswipe-dev-secret-change-me'
 
@@ -82,6 +83,8 @@ export function publicUser(u: DbUser) {
     mainRole: u.main_role,
     dawSoftware: u.daw_software,
     statusTag: u.status_tag,
+    avatarUrl: u.avatar_url ?? null,
+    socialLinks: parseSocialLinks(u.social_links),
     canUpload: u.can_upload !== false,
     createdAt: u.created_at,
   }

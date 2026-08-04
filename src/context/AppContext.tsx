@@ -15,6 +15,7 @@ import {
   apiRegister,
   apiMe,
   apiSubmitReport,
+  apiUpdateProfile,
   type ApiUser,
 } from '../lib/api'
 import {
@@ -37,6 +38,7 @@ import {
 import {
   defaultRadar,
   loadFeedTracks,
+  patchArtistFeedTracks,
   pickLocalTracks,
   publishToFeed,
 } from '../lib/feed'
@@ -69,8 +71,10 @@ import {
   type ListenerPhase,
   type RadarFilters,
   type Role,
+  type StreamingLinks,
   type Track,
 } from '../types'
+import type { UploadTrackInput } from '../components/TrackUploadPanel'
 
 type AuthFail = { ok: false; error: string }
 type AuthOk = { ok: true }
@@ -124,8 +128,9 @@ interface AppState {
   setFitView: (view: FitView) => void
   collabProfile: CollabProfile
   setCollabProfile: (p: CollabProfile) => void
+  saveArtistProfile: () => Promise<void>
   myTracks: Track[]
-  addMyTrack: (file: File, title?: string, genreTag?: GenreTag) => void | Promise<void>
+  addMyTrack: (file: File, input: UploadTrackInput) => void | Promise<void>
   focusFeedback: string
   setFocusFeedback: (v: string) => void
 
@@ -155,6 +160,39 @@ const FALLBACK_PROFILE: CollabProfile = {
   status: 'Открыт к фитам',
   references: [],
   bio: '',
+  social: {},
+}
+
+function mergeApiUserProfile(prev: CollabProfile, apiUser: ApiUser, login: string): CollabProfile {
+  const softFromApi = apiUser.dawSoftware
+    ? (apiUser.dawSoftware.split(',').map((s) => s.trim()).filter(Boolean) as CollabProfile['soft'])
+    : prev.soft
+  const roleFromApi = (apiUser.mainRole as CollabProfile['role']) || prev.role
+  const statusFromApi = (apiUser.statusTag as CollabProfile['status']) || prev.status
+  return {
+    ...prev,
+    name: apiUser.artistName?.trim() || prev.name || login,
+    avatar: apiUser.avatarUrl?.trim() || prev.avatar,
+    role: roleFromApi,
+    soft: softFromApi.length ? softFromApi : prev.soft,
+    status: statusFromApi,
+    social: {
+      ...prev.social,
+      ...(apiUser.socialLinks ?? {}),
+    },
+  }
+}
+
+function cleanSocialForApi(social: StreamingLinks): StreamingLinks {
+  const out: StreamingLinks = {}
+  for (const [k, v] of Object.entries(social)) {
+    if (typeof v === 'string' && v.trim()) out[k as keyof StreamingLinks] = v.trim()
+  }
+  return out
+}
+
+function normLogin(login: string) {
+  return login.trim().toLowerCase()
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -204,10 +242,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   feedTracksRef.current = feedTracks
   radarRef.current = radar
 
-  const applyCabinet = useCallback((loginName: string, cabinet: UserCabinet) => {
+  const applyCabinet = useCallback((loginName: string, cabinet: UserCabinet, apiUser?: ApiUser) => {
     setDiscoveries(cabinet.discoveries ?? [])
     setMyTracks(ownTracksOnly(loginName, cabinet.myTracks))
-    setCollabProfile(cabinet.collabProfile ?? emptyCabinet(loginName).collabProfile)
+    const baseProfile = {
+      ...(cabinet.collabProfile ?? emptyCabinet(loginName).collabProfile),
+      social: cabinet.collabProfile?.social ?? {},
+    }
+    setCollabProfile(
+      apiUser ? mergeApiUserProfile(baseProfile, apiUser, loginName) : baseProfile,
+    )
     setFocusFeedback(cabinet.focusFeedback || 'Оцените сведение')
     setProposals(cabinet.proposals ?? [])
     setChatThreads(cabinet.chatThreads ?? {})
@@ -255,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAccountRole(apiUser.role)
         setCanUpload(apiUser.canUpload)
         setRole(s.role ?? (isStaffRole(apiUser.role) ? null : apiUser.role === 'artist' ? 'artist' : 'listener'))
-        applyCabinet(apiUser.email, cabinet)
+        applyCabinet(apiUser.email, cabinet, apiUser)
         await loadBlacklistFromApi(s.token!)
         void refreshFeed()
       } catch {
@@ -276,10 +320,67 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAccountRole(apiUser.role)
       setCanUpload(apiUser.canUpload)
       userIdRef.current = apiUser.id
+      setCollabProfile((prev) => mergeApiUserProfile(prev, apiUser, apiUser.email))
     } catch {
       /* session expired — admin page will 404 */
     }
   }, [])
+
+  const saveArtistProfile = useCallback(async () => {
+    const token = authTokenRef.current
+    const login = userRef.current
+    if (!login) throw new Error('Войдите в аккаунт')
+
+    const social = cleanSocialForApi(collabProfile.social)
+    if (token) {
+      const { user: apiUser } = await apiUpdateProfile(token, {
+        artistName: collabProfile.name.trim() || login,
+        avatarUrl: collabProfile.avatar.trim() || undefined,
+        mainRole: collabProfile.role,
+        dawSoftware: collabProfile.soft.join(', ') || undefined,
+        statusTag: collabProfile.status,
+        social,
+      })
+      setCollabProfile((prev) => mergeApiUserProfile(prev, apiUser, login))
+      setCanUpload(apiUser.canUpload)
+    }
+
+    setFeedTracks((feed) =>
+      feed.map((t) =>
+        normLogin(t.artistId) === normLogin(login)
+          ? {
+              ...t,
+              artistName: collabProfile.name.trim() || login,
+              avatar: collabProfile.avatar,
+              streaming: { ...social },
+              artistRole: collabProfile.role,
+              soft: [...collabProfile.soft],
+              status: collabProfile.status,
+            }
+          : t,
+      ),
+    )
+    patchArtistFeedTracks(login, {
+      artistName: collabProfile.name.trim() || login,
+      avatar: collabProfile.avatar,
+      streaming: { ...social },
+      artistRole: collabProfile.role,
+      soft: [...collabProfile.soft],
+      status: collabProfile.status,
+    })
+    setMyTracks((tracks) =>
+      tracks.map((t) => ({
+        ...t,
+        artistName: collabProfile.name.trim() || login,
+        avatar: collabProfile.avatar,
+        streaming: { ...social },
+        artistRole: collabProfile.role,
+        soft: [...collabProfile.soft],
+        status: collabProfile.status,
+      })),
+    )
+    setNotifications((n) => ['Профиль артиста сохранён', ...n])
+  }, [collabProfile])
 
   useEffect(() => {
     if (!user || !cabinetReady) return
@@ -337,7 +438,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAccountRole(apiUser.role)
       setCanUpload(apiUser.canUpload)
       setRole(nextRole)
-      applyCabinet(email, cabinet)
+      applyCabinet(email, cabinet, apiUser)
       setSession({ login: email, role: nextRole, token, userId: apiUser.id })
       setNotifications([])
       void loadBlacklistFromApi(token).catch(() => clearBlacklistCache())
@@ -761,13 +862,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshArtistStats = useCallback(() => {
     if (!user) return
+    const feed = feedTracksRef.current
     setMyTracks((tracks) =>
       ownTracksOnly(
         user,
-        tracks.map((t) => ({
-          ...t,
-          skipCurve: buildSkipCurve(t.id),
-        })),
+        tracks.map((t) => {
+          const fromFeed = feed.find((f) => f.id === t.id)
+          return {
+            ...t,
+            ...(fromFeed
+              ? {
+                  audioUrl: fromFeed.audioUrl,
+                  hasAudio: fromFeed.hasAudio,
+                  duration: fromFeed.duration,
+                  previewStartSec: fromFeed.previewStartSec,
+                  previewDurationSec: fromFeed.previewDurationSec,
+                }
+              : {}),
+            skipCurve: buildSkipCurve(t.id),
+          }
+        }),
       ),
     )
     setStatsTick((n) => n + 1)
@@ -785,21 +899,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) return
     setRole('artist')
     setArtistTab('music')
-    const acc = findAccount(user)
-    if (acc) {
+    void refreshFeed().then((feed) => {
+      const acc = findAccount(user)
+      if (!acc) return
       persistSkip.current = true
-      const mine = ownTracksOnly(user, acc.cabinet.myTracks).map((t) => ({
-        ...t,
-        skipCurve: buildSkipCurve(t.id),
-      }))
+      const mine = ownTracksOnly(user, acc.cabinet.myTracks).map((t) => {
+        const fromFeed = feed.find((f) => f.id === t.id)
+        return {
+          ...t,
+          ...(fromFeed
+            ? {
+                audioUrl: fromFeed.audioUrl,
+                hasAudio: fromFeed.hasAudio,
+                duration: fromFeed.duration,
+                previewStartSec: fromFeed.previewStartSec,
+                previewDurationSec: fromFeed.previewDurationSec,
+              }
+            : {}),
+          skipCurve: buildSkipCurve(t.id),
+        }
+      })
       setMyTracks(mine)
       setStatsTick((n) => n + 1)
-    }
-  }, [user])
+    })
+  }, [user, refreshFeed])
 
   const addMyTrack = useCallback(
-    async (file: File, title?: string, genreTag: GenreTag = 'Рэп') => {
-      if (!user) return
+    async (file: File, input: UploadTrackInput) => {
+      if (!user) throw new Error('Войдите в аккаунт')
       const token = authTokenRef.current
       if (token) {
         const check = await apiCheckUpload(token)
@@ -809,32 +936,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ...n,
           ])
           setCanUpload(false)
-          return
+          throw new Error(check.error ?? 'Загрузка запрещена')
         }
       } else if (!canUpload) {
-        setNotifications((n) => [
-          'Вы заблокированы за нарушение правил',
-          ...n,
-        ])
-        return
+        const msg = 'Вы заблокированы за нарушение правил'
+        setNotifications((n) => [msg, ...n])
+        throw new Error(msg)
       }
-      const name = title?.trim() || file.name.replace(/\.[^.]+$/, '')
+
+      const name = input.title.trim() || file.name.replace(/\.[^.]+$/, '')
+      const social = cleanSocialForApi(collabProfile.social)
       const base: Track = {
         id: `mine-${user}-${Date.now()}`,
         title: name,
         artistId: user,
-        artistName: collabProfile.name || user,
+        artistName: collabProfile.name.trim() || user,
         avatar: collabProfile.avatar,
-        genre: genreTag,
-        genreTags: [genreTag],
+        genre: input.genreTag,
+        genreTags: [input.genreTag],
         duration: 40,
+        previewStartSec: input.previewStartSec,
+        previewDurationSec: input.previewDurationSec,
         focusFeedback,
         skipCurve: [],
         openToCollab: true,
         artistRole: collabProfile.role,
         soft: [...collabProfile.soft],
         status: collabProfile.status,
-        streaming: {},
+        streaming: { ...social },
         waveSeed: Math.floor(Math.random() * 30) + 1,
         hasAudio: true,
         source: 'soundlink',
@@ -842,11 +971,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const published = await publishToFeed(base, file)
-      // только в СВОЙ кабинет — не в чужие и не в текущую очередь слушателя
       setMyTracks((t) => ownTracksOnly(user, [published, ...t]))
       setFeedTracks((f) => [published, ...f.filter((x) => x.id !== published.id)])
       setNotifications((n) => [
-        `«${name}» загружено. Другие слушатели увидят его в радаре «Локальные»`,
+        `«${name}» загружено. Слушатели услышат фрагмент с ${input.previewStartSec} сек.`,
         ...n,
       ])
     },
@@ -1024,6 +1152,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFitView,
       collabProfile,
       setCollabProfile,
+      saveArtistProfile,
       myTracks,
       addMyTrack,
       focusFeedback,
@@ -1083,6 +1212,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       artistTab,
       fitView,
       collabProfile,
+      saveArtistProfile,
       myTracks,
       addMyTrack,
       focusFeedback,

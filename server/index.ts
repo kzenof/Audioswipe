@@ -19,6 +19,7 @@ import {
   mapReport,
   REPORT_REASONS,
 } from './reports.js'
+import { updateUserProfile } from './profile.js'
 import {
   checkDbConnection,
   DbUnavailableError,
@@ -291,6 +292,35 @@ app.get('/api/auth/upload-check', async (req, res) => {
     return
   }
   res.json({ allowed: true })
+})
+
+app.patch('/api/users/me/profile', async (req, res) => {
+  try {
+    const auth = requireAuth(req.headers.authorization, res)
+    if (!auth) return
+
+    const body = req.body ?? {}
+    const result = await updateUserProfile(auth.userId, {
+      artistName: body.artistName ?? body.artist_name,
+      avatarUrl: body.avatarUrl ?? body.avatar_url,
+      mainRole: body.mainRole ?? body.main_role,
+      dawSoftware: body.dawSoftware ?? body.daw_software,
+      statusTag: body.statusTag ?? body.status_tag,
+      social: body.social ?? body.socialLinks ?? body.social_links,
+    })
+    if (!result.ok) {
+      res.status(400).json({ error: result.error })
+      return
+    }
+    res.json({ user: publicUser(result.user) })
+  } catch (e) {
+    if (e instanceof DbUnavailableError) {
+      res.status(503).json({ error: 'База данных недоступна' })
+      return
+    }
+    console.error(e)
+    res.status(500).json({ error: 'Ошибка сервера' })
+  }
 })
 
 async function main() {

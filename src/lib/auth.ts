@@ -49,6 +49,7 @@ export function emptyCollabProfile(login: string): CollabProfile {
     status: 'Открыт к фитам',
     references: [],
     bio: '',
+    social: {},
   }
 }
 
@@ -148,7 +149,10 @@ function sanitizeAccount(account: Account): Account {
       discoveries: cabinet.discoveries ?? [],
       proposals: cabinet.proposals ?? [],
       chatThreads: cabinet.chatThreads ?? {},
-      collabProfile: cabinet.collabProfile ?? emptyCollabProfile(login),
+      collabProfile: {
+        ...(cabinet.collabProfile ?? emptyCollabProfile(login)),
+        social: cabinet.collabProfile?.social ?? {},
+      },
     },
   }
 }

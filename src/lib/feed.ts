@@ -1,4 +1,5 @@
 import type { GenreTag, RadarFilters, Track, TrackSource } from '../types'
+import { DEFAULT_PREVIEW_DURATION_SEC } from '../types'
 
 const FEED_KEY = 'signal_feed_v2'
 const DB_NAME = 'signal_audio_db'
@@ -10,12 +11,33 @@ function norm(id: string) {
   return id.trim().toLowerCase()
 }
 
+function normalizeTrackMeta(t: FeedTrack): FeedTrack {
+  const duration = Math.max(5, t.duration || 40)
+  const clipLen = Math.min(
+    t.previewDurationSec ?? DEFAULT_PREVIEW_DURATION_SEC,
+    duration,
+  )
+  const maxStart = Math.max(0, duration - clipLen)
+  const previewStartSec = Math.min(
+    Math.max(0, t.previewStartSec ?? 0),
+    maxStart,
+  )
+  return {
+    ...t,
+    duration,
+    previewStartSec,
+    previewDurationSec: clipLen,
+    streaming: t.streaming ?? {},
+    genreTags: t.genreTags?.length ? t.genreTags : (['Рэп'] as GenreTag[]),
+  }
+}
+
 function readMeta(): FeedTrack[] {
   try {
     const raw = localStorage.getItem(FEED_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw) as FeedTrack[]
-    return Array.isArray(parsed) ? parsed : []
+    return Array.isArray(parsed) ? parsed.map(normalizeTrackMeta) : []
   } catch {
     return []
   }
@@ -59,7 +81,8 @@ async function getAudio(id: string): Promise<Blob | null> {
   })
 }
 
-function probeDuration(file: File): Promise<number> {
+/** Полная длительность файла (для выбора момента превью) */
+export function probeAudioDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file)
     const audio = new Audio()
@@ -67,7 +90,7 @@ function probeDuration(file: File): Promise<number> {
     audio.onloadedmetadata = () => {
       const d = Number.isFinite(audio.duration) ? Math.round(audio.duration) : 40
       URL.revokeObjectURL(url)
-      resolve(Math.max(5, Math.min(d, 180)))
+      resolve(Math.max(5, d))
     }
     audio.onerror = () => {
       URL.revokeObjectURL(url)
@@ -77,17 +100,33 @@ function probeDuration(file: File): Promise<number> {
   })
 }
 
+function probeDuration(file: File): Promise<number> {
+  return probeAudioDuration(file)
+}
+
 export async function publishToFeed(track: Track, file: File): Promise<Track> {
   const duration = await probeDuration(file)
   await putAudio(track.id, file)
 
-  const meta: FeedTrack = {
+  const clipLen = Math.min(
+    track.previewDurationSec ?? DEFAULT_PREVIEW_DURATION_SEC,
+    duration,
+  )
+  const maxStart = Math.max(0, duration - clipLen)
+  const previewStartSec = Math.min(
+    Math.max(0, track.previewStartSec ?? 0),
+    maxStart,
+  )
+
+  const meta: FeedTrack = normalizeTrackMeta({
     ...track,
     duration,
+    previewStartSec,
+    previewDurationSec: clipLen,
     hasAudio: true,
     source: 'soundlink',
     monthlyListeners: 0,
-  }
+  })
   delete (meta as Track).audioUrl
   const feed = readMeta().filter((t) => t.id !== track.id)
   feed.unshift(meta)
@@ -101,10 +140,9 @@ export async function loadFeedTracks(): Promise<Track[]> {
   const hydrated: Track[] = []
   for (const t of meta) {
     const base: Track = {
-      ...t,
+      ...normalizeTrackMeta(t),
       source: 'soundlink',
       monthlyListeners: 0,
-      genreTags: t.genreTags?.length ? t.genreTags : (['Рэп'] as GenreTag[]),
     }
     if (!t.hasAudio) {
       hydrated.push(base)
@@ -193,6 +231,19 @@ export function buildFilteredQueue(
 
 export function defaultRadar(): RadarFilters {
   return { popularity: 'freshmen', genres: [] }
+}
+
+/** Обновить метаданные всех треков артиста в localStorage-ленте */
+export function patchArtistFeedTracks(
+  artistLogin: string,
+  patch: Partial<Omit<Track, 'audioUrl'>>,
+) {
+  const key = norm(artistLogin)
+  const feed = readMeta()
+  const next = feed.map((t) =>
+    norm(t.artistId) === key ? normalizeTrackMeta({ ...t, ...patch }) : t,
+  )
+  writeMeta(next)
 }
 
 export type { TrackSource }

@@ -17,6 +17,8 @@ export interface DbUser {
   main_role: string | null
   daw_software: string | null
   status_tag: string | null
+  avatar_url?: string | null
+  social_links?: unknown
   can_upload: boolean | null
   created_at: Date | string
 }

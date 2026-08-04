@@ -11,6 +11,8 @@ export interface ApiUser {
   mainRole: string | null
   dawSoftware: string | null
   statusTag: string | null
+  avatarUrl: string | null
+  socialLinks: import('../types').StreamingLinks
   canUpload: boolean
   createdAt: string
 }
@@ -180,6 +182,29 @@ export async function apiAdminBanFromReport(token: string, reportId: number) {
     await apiFetch(`${API_BASE}/admin/reports/${reportId}/ban`, {
       method: 'POST',
       headers: authHeaders(token),
+    }),
+  )
+}
+
+export async function apiUpdateProfile(
+  token: string,
+  body: {
+    artistName?: string
+    avatarUrl?: string
+    mainRole?: string
+    dawSoftware?: string
+    statusTag?: string
+    social?: import('../types').StreamingLinks
+  },
+) {
+  return parseJson<{ user: ApiUser }>(
+    await apiFetch(`${API_BASE}/users/me/profile`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(token),
+      },
+      body: JSON.stringify(body),
     }),
   )
 }
