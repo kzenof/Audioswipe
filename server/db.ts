@@ -41,6 +41,13 @@ async function createPool(): Promise<pg.Pool> {
   const cfg = parseDatabaseUrl(databaseUrl)
   let host = cfg.hostname
 
+  if (!cfg.isLocal && cfg.hostname.startsWith('db.') && cfg.hostname.endsWith('.supabase.co')) {
+    console.warn(
+      'DB: Supabase Direct — только IPv6, Render не достучится. ' +
+        'Используй pooler из Supabase → Connect → Session pooler.',
+    )
+  }
+
   if (!cfg.isLocal) {
     try {
       const { address } = await dnsLookup(cfg.hostname, { family: 4 })
