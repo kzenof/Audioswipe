@@ -127,17 +127,37 @@ function mapYmTrack(
   }
 }
 
+function ymProxyBase() {
+  return (import.meta.env.VITE_YM_BASE as string | undefined)?.replace(/\/$/, '') ?? ''
+}
+
+/** Прямой URL Cloud Functions без API Gateway (paths не пробрасываются). */
+function isYcFunctionsDirect(base: string) {
+  return /functions\.yandexcloud\.net/i.test(base)
+}
+
 async function ymGet<T>(path: string, timeoutMs = 8000): Promise<T> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  const base = ymProxyBase()
   try {
-    const res = await fetch(`/ym-api${path}`, {
+    const [pathname, qs = ''] = path.split('?')
+    const url = isYcFunctionsDirect(base)
+      ? `${base}?path=${encodeURIComponent(pathname)}${qs ? `&${qs}` : ''}`
+      : `${base}/ym-api${path}`
+
+    const res = await fetch(url, {
       headers: {
         Accept: 'application/json',
         'X-Yandex-Music-Client': CLIENT,
       },
       signal: ctrl.signal,
     })
+    if (res.status === 451) {
+      throw new Error(
+        'Яндекс недоступен с серверов за рубежом (451). Нужен прокси в РФ — см. VITE_YM_BASE',
+      )
+    }
     if (!res.ok) throw new Error(`Yandex API ${res.status}: ${path}`)
     return (await res.json()) as T
   } finally {
@@ -224,7 +244,11 @@ export async function fetchYandexChartTracks(): Promise<YmTrack[]> {
 }
 
 export function yandexStreamUrl(trackId: string) {
-  return `/ym-stream/${encodeURIComponent(trackId)}`
+  const base = ymProxyBase()
+  if (isYcFunctionsDirect(base)) {
+    return `${base}?trackId=${encodeURIComponent(trackId)}`
+  }
+  return `${base}/ym-stream/${encodeURIComponent(trackId)}`
 }
 
 export function yandexEmbedUrl(trackId: string, albumId?: string) {

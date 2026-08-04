@@ -87,7 +87,7 @@ app.post('/api/auth/register', async (req, res) => {
       dawSoftware,
       statusTag,
     })
-    if (!result.ok) {
+    if (result.ok === false) {
       res.status(400).json({ error: result.error })
       return
     }
@@ -117,7 +117,7 @@ app.post('/api/auth/login', async (req, res) => {
     const login = String(req.body?.login ?? req.body?.email ?? '')
     const password = String(req.body?.password ?? '')
     const result = await loginUser(login, password)
-    if (!result.ok) {
+    if (result.ok === false) {
       res.status(401).json({ error: result.error })
       return
     }
@@ -192,7 +192,7 @@ app.post('/api/reports', async (req, res) => {
       trackTitle: trackTitle || undefined,
       reason,
     })
-    if (!result.ok) {
+    if (result.ok === false) {
       res.status(400).json({ error: result.error })
       return
     }
@@ -227,7 +227,7 @@ app.patch('/api/admin/users/:id/upload', async (req, res) => {
     const userId = Number(req.params.id)
     const canUpload = Boolean(req.body?.canUpload ?? req.body?.can_upload)
     const result = await setCanUpload(userId, canUpload)
-    if (!result.ok) {
+    if (result.ok === false) {
       res.status(400).json({ error: result.error })
       return
     }
@@ -255,7 +255,7 @@ app.delete('/api/admin/reports/:id', async (req, res) => {
     const auth = requireAdmin(req.headers.authorization, res)
     if (!auth) return
     const result = await dismissReport(Number(req.params.id))
-    if (!result.ok) {
+    if (result.ok === false) {
       res.status(404).json({ error: result.error })
       return
     }
@@ -271,7 +271,7 @@ app.post('/api/admin/reports/:id/ban', async (req, res) => {
     const auth = requireAdmin(req.headers.authorization, res)
     if (!auth) return
     const result = await banArtistFromReport(Number(req.params.id))
-    if (!result.ok) {
+    if (result.ok === false) {
       res.status(400).json({ error: result.error })
       return
     }
@@ -314,7 +314,7 @@ app.patch('/api/users/me/profile', async (req, res) => {
       statusTag: body.statusTag ?? body.status_tag,
       social: body.social ?? body.socialLinks ?? body.social_links,
     })
-    if (!result.ok) {
+    if (result.ok === false) {
       res.status(400).json({ error: result.error })
       return
     }

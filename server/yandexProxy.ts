@@ -105,6 +105,14 @@ export function registerYmApiProxy(app: Express) {
         method: req.method === 'HEAD' ? 'GET' : req.method,
         headers: ymHeaders(),
       })
+      if (upstream.status === 451) {
+        res.status(451).json({
+          error: 'yandex_geo_blocked',
+          message:
+            'Yandex Music API недоступен с этого сервера (451). Хостинг должен быть в РФ.',
+        })
+        return
+      }
       const body = Buffer.from(await upstream.arrayBuffer())
       res.status(upstream.status)
       const ct = upstream.headers.get('content-type')

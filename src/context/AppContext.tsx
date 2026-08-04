@@ -680,9 +680,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error(e)
       const msg = e instanceof Error ? e.message : String(e)
       setNotifications((n) => [
-        `Радар: ${msg.includes('кандидат') || msg.includes('abort') || msg.includes('ETIMEDOUT') || msg.includes('502')
-          ? 'Сервис не ответил вовремя — попробуй ещё раз или смени фильтр'
-          : msg}`,
+        `Радар: ${
+          msg.includes('451') || msg.includes('за рубежом')
+            ? 'Яндекс блокирует зарубежные сервера — нужен прокси в РФ'
+            : msg.includes('кандидат') ||
+                msg.includes('abort') ||
+                msg.includes('ETIMEDOUT') ||
+                msg.includes('502')
+              ? 'Сервис не ответил вовремя — попробуй ещё раз или смени фильтр'
+              : msg
+        }`,
         ...n,
       ])
     } finally {
