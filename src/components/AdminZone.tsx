@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
+import { AdminLoginForm } from './AdminLoginForm'
 import { BackButton } from './BackButton'
 import {
   apiAdminBanFromReport,
@@ -15,7 +16,8 @@ import { NotFoundPage } from './NotFoundPage'
 type AdminTab = 'users' | 'reports'
 
 export function AdminZone() {
-  const { accountRole, authToken, logout, cabinetReady, refreshProfile } = useApp()
+  const { accountRole, authToken, logout, cabinetReady, refreshProfile, adminLogin } =
+    useApp()
   const [tab, setTab] = useState<AdminTab>('users')
   const [search, setSearch] = useState('')
   const [users, setUsers] = useState<AdminUserRow[]>([])
@@ -75,6 +77,17 @@ export function AdminZone() {
   }
 
   if (accountRole !== 'admin') {
+    if (!authToken) {
+      return (
+        <AdminLoginForm
+          onSubmit={async (login, password) => {
+            const result = await adminLogin(login, password)
+            if (result.ok) await refreshProfile()
+            return result
+          }}
+        />
+      )
+    }
     return <NotFoundPage />
   }
 

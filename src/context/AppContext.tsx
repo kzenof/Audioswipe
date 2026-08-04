@@ -81,6 +81,7 @@ interface AppState {
   authToken: string | null
   canUpload: boolean
   login: (login: string, password: string, role: Exclude<Role, null>) => Promise<AuthOk | AuthFail>
+  adminLogin: (login: string, password: string) => Promise<AuthOk | AuthFail>
   register: (login: string, password: string, role: Exclude<Role, null>) => Promise<AuthOk | AuthFail>
   logout: () => void
   switchToListener: () => void
@@ -368,6 +369,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { token, user } = await apiLogin(loginName, password)
         ensureLocalCabinet(user.email)
         enterAccount(user, nextRole, token)
+        return { ok: true }
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : 'Ошибка входа',
+        }
+      }
+    },
+    [enterAccount],
+  )
+
+  const adminLogin = useCallback(
+    async (loginName: string, password: string): Promise<AuthOk | AuthFail> => {
+      try {
+        const { token, user } = await apiLogin(loginName, password)
+        if (user.role !== 'admin') {
+          return { ok: false, error: 'Нет доступа' }
+        }
+        ensureLocalCabinet(user.email)
+        enterAccount(user, 'listener', token)
+        setRole(null)
         return { ok: true }
       } catch (e) {
         return {
@@ -962,6 +984,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       authToken,
       canUpload,
       login,
+      adminLogin,
       register,
       logout,
       switchToListener,
@@ -1024,6 +1047,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       authToken,
       canUpload,
       login,
+      adminLogin,
       register,
       logout,
       switchToListener,

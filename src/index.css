@@ -1764,6 +1764,45 @@ a {
   justify-content: center;
 }
 
+.admin-login {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+}
+
+.admin-login__card {
+  width: min(400px, 100%);
+  padding: 1.75rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.admin-login__brand {
+  display: inline-block;
+  margin-bottom: 1rem;
+}
+
+.admin-login h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+
+.admin-login__sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.admin-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .admin-zone {
   min-height: 100vh;
   padding: 1.25rem;
