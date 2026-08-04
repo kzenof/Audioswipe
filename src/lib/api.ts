@@ -52,7 +52,7 @@ export async function apiRegister(body: {
   role: 'listener' | 'artist'
   artistName?: string
 }) {
-  return parseJson<{ token: string; user: ApiUser }>(
+  return parseJson<{ token: string; user: ApiUser; isFirstUser?: boolean }>(
     await apiFetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

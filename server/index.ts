@@ -88,14 +88,22 @@ app.post('/api/auth/register', async (req, res) => {
       res.status(400).json({ error: result.error })
       return
     }
-    res.status(201).json({ token: result.token, user: publicUser(result.user) })
+    res.status(201).json({
+      token: result.token,
+      user: publicUser(result.user),
+      isFirstUser: result.isFirstUser ?? false,
+    })
   } catch (e) {
     if (e instanceof DbUnavailableError) {
       res.status(503).json({ error: 'База данных недоступна. Проверь DATABASE_URL на Render.' })
       return
     }
-    console.error(e)
-    res.status(500).json({ error: 'Ошибка сервера' })
+    console.error('POST /api/auth/register', e)
+    const hint =
+      e && typeof e === 'object' && 'message' in e
+        ? String((e as { message: string }).message)
+        : 'Ошибка сервера'
+    res.status(500).json({ error: hint.slice(0, 200) })
   }
 })
 

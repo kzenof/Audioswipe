@@ -107,6 +107,24 @@ function validateLogin(login: string) {
   return null
 }
 
+function pgErrorHint(e: unknown): string | null {
+  if (!e || typeof e !== 'object' || !('code' in e)) return null
+  const err = e as { code: string; column?: string; constraint?: string }
+  if (err.code === '42703') {
+    return `В БД нет колонки «${err.column ?? '?'}». Проверь схему users в Supabase.`
+  }
+  if (err.code === '23514' && String(err.constraint ?? '').includes('role')) {
+    return 'Роль admin не разрешена в БД. Обнови CHECK: listener | artist | admin'
+  }
+  if (err.code === '23505') return 'Такой логин уже занят'
+  return null
+}
+
+async function countUsers() {
+  const result = await query<{ count: string }>('SELECT COUNT(*)::text AS count FROM users')
+  return Number(result.rows[0]?.count ?? 0)
+}
+
 export async function registerUser(input: RegisterInput) {
   const loginErr = validateLogin(input.login)
   if (loginErr) {
@@ -120,24 +138,51 @@ export async function registerUser(input: RegisterInput) {
     return { ok: false as const, error: 'Такой логин уже занят' }
   }
 
+  const isFirstUser = (await countUsers()) === 0
+  const role = isFirstUser ? 'admin' : input.role
   const hash = await hashPassword(input.password)
-  const result = await query<DbUser>(
-    `INSERT INTO users (email, password_hash, role, artist_name, main_role, daw_software, status_tag, can_upload)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-     RETURNING *`,
-    [
-      login,
-      hash,
-      input.role,
-      input.role === 'artist' ? input.artistName ?? login : null,
-      input.role === 'artist' ? input.mainRole ?? null : null,
-      input.role === 'artist' ? input.dawSoftware ?? null : null,
-      input.role === 'artist' ? input.statusTag ?? null : null,
-    ],
-  )
+  const artistName =
+    role === 'artist' || isFirstUser ? input.artistName ?? login : null
+  const params = [
+    login,
+    hash,
+    role,
+    artistName,
+    role === 'artist' ? input.mainRole ?? null : null,
+    role === 'artist' ? input.dawSoftware ?? null : null,
+    role === 'artist' ? input.statusTag ?? null : null,
+  ]
 
-  const user = result.rows[0]
-  return { ok: true as const, user, token: signToken(user) }
+  try {
+    const result = await query<DbUser>(
+      `INSERT INTO users (email, password_hash, role, artist_name, main_role, daw_software, status_tag, can_upload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+       RETURNING *`,
+      params,
+    )
+    const user = result.rows[0]
+    return { ok: true as const, user, token: signToken(user), isFirstUser }
+  } catch (e) {
+    const hint = pgErrorHint(e)
+    if (hint?.includes('can_upload') || (e && typeof e === 'object' && 'column' in e && (e as { column?: string }).column === 'can_upload')) {
+      try {
+        const result = await query<DbUser>(
+          `INSERT INTO users (email, password_hash, role, artist_name, main_role, daw_software, status_tag)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING *`,
+          params,
+        )
+        const user = result.rows[0]
+        return { ok: true as const, user, token: signToken(user), isFirstUser }
+      } catch (e2) {
+        const hint2 = pgErrorHint(e2)
+        if (hint2) return { ok: false as const, error: hint2 }
+        throw e2
+      }
+    }
+    if (hint) return { ok: false as const, error: hint }
+    throw e
+  }
 }
 
 export async function loginUser(login: string, password: string) {

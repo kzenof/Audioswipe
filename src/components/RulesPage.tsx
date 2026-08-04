@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom'
+import { BackButton } from './BackButton'
 import { Footer } from './Footer'
 
 export function RulesPage() {
   return (
     <div className="rules-page">
+      <BackButton />
       <header className="rules-page__head">
         <Link to="/" className="brand-mini">
           Audio<span>swipe</span>

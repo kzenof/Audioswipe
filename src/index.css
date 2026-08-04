@@ -1703,6 +1703,21 @@ a {
   color: var(--cyan);
 }
 
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.35rem 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.back-btn:hover {
+  color: var(--cyan);
+}
+
 .rules-page {
   min-height: 100vh;
   padding: 2rem 1.25rem 3rem;

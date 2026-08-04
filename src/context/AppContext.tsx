@@ -367,7 +367,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       nextRole: Exclude<Role, null>,
     ): Promise<AuthOk | AuthFail> => {
       try {
-        const { token, user } = await apiRegister({
+        const { token, user, isFirstUser } = await apiRegister({
           login: loginName,
           password,
           role: nextRole,
@@ -375,6 +375,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
         ensureLocalCabinet(user.email)
         enterAccount(user, nextRole, token)
+        if (isFirstUser || user.role === 'admin') {
+          setNotifications((n) => [
+            'Ты первый пользователь — роль admin. Открой /admin-zone',
+            ...n,
+          ])
+        }
         return { ok: true }
       } catch (e) {
         return {

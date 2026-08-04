@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
+import { BackButton } from './BackButton'
 import {
   apiAdminBanFromReport,
   apiAdminDismissReport,
@@ -93,6 +94,7 @@ export function AdminZone() {
 
   return (
     <div className="admin-zone">
+      <BackButton />
       <header className="admin-zone__head">
         <Link to="/" className="brand-mini">
           Audio<span>swipe</span>
