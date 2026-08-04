@@ -15,13 +15,22 @@ import { NotFoundPage } from './NotFoundPage'
 type AdminTab = 'users' | 'reports'
 
 export function AdminZone() {
-  const { accountRole, authToken, logout } = useApp()
+  const { accountRole, authToken, logout, cabinetReady, refreshProfile } = useApp()
   const [tab, setTab] = useState<AdminTab>('users')
   const [search, setSearch] = useState('')
   const [users, setUsers] = useState<AdminUserRow[]>([])
   const [reports, setReports] = useState<PlatformReport[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [accessChecked, setAccessChecked] = useState(false)
+
+  useEffect(() => {
+    if (!cabinetReady) return
+    void (async () => {
+      await refreshProfile()
+      setAccessChecked(true)
+    })()
+  }, [cabinetReady, refreshProfile])
 
   const loadUsers = useCallback(async () => {
     if (!authToken) return
@@ -56,6 +65,14 @@ export function AdminZone() {
     if (tab === 'users') void loadUsers()
     else void loadReports()
   }, [accountRole, authToken, tab, loadUsers, loadReports])
+
+  if (!cabinetReady || !accessChecked) {
+    return (
+      <div className="admin-zone admin-zone--checking">
+        <p className="admin-zone__loading">Проверка доступа…</p>
+      </div>
+    )
+  }
 
   if (accountRole !== 'admin') {
     return <NotFoundPage />

@@ -87,6 +87,8 @@ interface AppState {
   switchToArtist: () => void
   goHome: () => void
   submitReport: (track: Track, reason: string) => Promise<void>
+  cabinetReady: boolean
+  refreshProfile: () => Promise<void>
 
   radar: RadarFilters
   setRadarPopularity: (p: RadarFilters['popularity']) => void
@@ -263,6 +265,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })()
   }, [applyCabinet, refreshFeed])
 
+  const refreshProfile = useCallback(async () => {
+    const token = authTokenRef.current
+    if (!token) return
+    try {
+      const { user: apiUser } = await apiMe(token)
+      setUser(apiUser.email)
+      setAccountRole(apiUser.role)
+      setCanUpload(apiUser.canUpload)
+      userIdRef.current = apiUser.id
+    } catch {
+      /* session expired — admin page will 404 */
+    }
+  }, [])
+
   useEffect(() => {
     if (!user || !cabinetReady) return
     if (persistSkip.current) {
@@ -335,8 +351,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           (cabinet.collabProfile?.references?.length ?? 0) === 0
         setFitView(empty ? 'profile' : 'feed')
       }
+      if (apiUser.role === 'admin') {
+        navigate('/admin-zone')
+      }
     },
-    [applyCabinet, refreshFeed],
+    [applyCabinet, refreshFeed, navigate],
   )
 
   const login = useCallback(
@@ -949,6 +968,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       switchToArtist,
       goHome,
       submitReport,
+      cabinetReady,
+      refreshProfile,
       radar,
       setRadarPopularity,
       toggleRadarGenre,
@@ -1009,6 +1030,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       switchToArtist,
       goHome,
       submitReport,
+      cabinetReady,
+      refreshProfile,
       radar,
       setRadarPopularity,
       toggleRadarGenre,
