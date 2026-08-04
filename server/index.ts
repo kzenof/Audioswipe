@@ -14,25 +14,14 @@ import { checkDbConnection } from './db.js'
 const app = express()
 const PORT = Number(process.env.PORT ?? 3001)
 
-const allowedOrigins = [
-  'https://audioswipe.vercel.app',
-  'http://localhost:5173',
-  process.env.CORS_ORIGIN,
-].filter(Boolean) as string[]
-
+// Разрешаем запросы с фронтенда на Vercel (+ локалка для разработки)
 app.use(
   cors({
-    origin(origin, callback) {
-      if (
-        !origin ||
-        allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app')
-      ) {
-        callback(null, true)
-      } else {
-        callback(new Error('Not allowed by CORS'))
-      }
-    },
+    origin: [
+      'https://audioswipe.vercel.app',
+      'http://localhost:5173',
+      ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : []),
+    ],
     credentials: true,
   }),
 )
