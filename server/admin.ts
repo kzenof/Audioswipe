@@ -2,13 +2,22 @@ import type { Response } from 'express'
 import { authFromHeader, findUserById } from './auth.js'
 import { query } from './db.js'
 
+import type { Response } from 'express'
+import { authFromHeader, findUserById } from './auth.js'
+import { query } from './db.js'
+
+/** admin и owner — доступ в админ-панель */
+export function isStaffRole(role: string) {
+  return role === 'admin' || role === 'owner'
+}
+
 export function requireAdmin(authHeader: string | undefined, res: Response) {
   const auth = authFromHeader(authHeader)
   if (!auth) {
     res.status(401).json({ error: 'Требуется авторизация' })
     return null
   }
-  if (auth.role !== 'admin') {
+  if (!isStaffRole(auth.role)) {
     res.status(404).json({ error: 'Not found' })
     return null
   }
@@ -60,7 +69,7 @@ export async function listUsers(search = '') {
 export async function setCanUpload(userId: number, canUpload: boolean) {
   const target = await findUserById(userId)
   if (!target) return { ok: false as const, error: 'Пользователь не найден' }
-  if (target.role === 'admin') {
+  if (isStaffRole(target.role)) {
     return { ok: false as const, error: 'Нельзя блокировать администратора' }
   }
   await query('UPDATE users SET can_upload = $1 WHERE id = $2', [canUpload, userId])

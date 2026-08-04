@@ -12,7 +12,7 @@ export interface DbUser {
   id: number
   email: string
   password_hash: string
-  role: 'listener' | 'artist' | 'admin'
+  role: 'listener' | 'artist' | 'admin' | 'owner'
   artist_name: string | null
   main_role: string | null
   daw_software: string | null

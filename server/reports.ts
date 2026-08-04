@@ -1,4 +1,5 @@
 import { findUserById } from './auth.js'
+import { isStaffRole } from './admin.js'
 import { query } from './db.js'
 
 export interface DbReport {
@@ -100,7 +101,7 @@ export async function banArtistFromReport(reportId: number) {
 
   const target = await findUserById(report.reported_user_id)
   if (!target) return { ok: false as const, error: 'Артист не найден' }
-  if (target.role === 'admin') {
+  if (isStaffRole(target.role)) {
     return { ok: false as const, error: 'Нельзя заблокировать администратора' }
   }
 

@@ -1,5 +1,10 @@
 export type Role = 'listener' | 'artist' | null
-export type AccountRole = 'listener' | 'artist' | 'admin'
+export type AccountRole = 'listener' | 'artist' | 'admin' | 'owner'
+
+/** admin и owner — доступ в админ-панель */
+export function isStaffRole(role: string | null | undefined): role is 'admin' | 'owner' {
+  return role === 'admin' || role === 'owner'
+}
 
 export type ReportReason =
   | 'Кража трека / авторское право'

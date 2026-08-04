@@ -114,7 +114,7 @@ function pgErrorHint(e: unknown): string | null {
     return `В БД нет колонки «${err.column ?? '?'}». Проверь схему users в Supabase.`
   }
   if (err.code === '23514' && String(err.constraint ?? '').includes('role')) {
-    return 'Роль admin не разрешена в БД. Обнови CHECK: listener | artist | admin'
+    return 'Роль admin/owner не разрешена в БД. Обнови CHECK constraint для role'
   }
   if (err.code === '23505') return 'Такой логин уже занят'
   return null

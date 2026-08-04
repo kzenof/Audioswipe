@@ -56,6 +56,7 @@ import {
 } from '../lib/reviews'
 import {
   normalizePopularityTier,
+  isStaffRole,
   type AccountRole,
   type ArtistTab,
   type ChatMessage,
@@ -253,7 +254,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setUser(apiUser.email)
         setAccountRole(apiUser.role)
         setCanUpload(apiUser.canUpload)
-        setRole(s.role ?? (apiUser.role === 'admin' ? null : apiUser.role === 'artist' ? 'artist' : 'listener'))
+        setRole(s.role ?? (isStaffRole(apiUser.role) ? null : apiUser.role === 'artist' ? 'artist' : 'listener'))
         applyCabinet(apiUser.email, cabinet)
         await loadBlacklistFromApi(s.token!)
         void refreshFeed()
@@ -352,7 +353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           (cabinet.collabProfile?.references?.length ?? 0) === 0
         setFitView(empty ? 'profile' : 'feed')
       }
-      if (apiUser.role === 'admin') {
+      if (isStaffRole(apiUser.role)) {
         navigate('/admin-zone')
       }
     },
@@ -384,7 +385,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (loginName: string, password: string): Promise<AuthOk | AuthFail> => {
       try {
         const { token, user } = await apiLogin(loginName, password)
-        if (user.role !== 'admin') {
+        if (!isStaffRole(user.role)) {
           return { ok: false, error: 'Нет доступа' }
         }
         ensureLocalCabinet(user.email)
@@ -416,9 +417,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
         ensureLocalCabinet(user.email)
         enterAccount(user, nextRole, token)
-        if (isFirstUser || user.role === 'admin') {
+        if (isFirstUser || isStaffRole(user.role)) {
           setNotifications((n) => [
-            'Ты первый пользователь — роль admin. Открой /admin-zone',
+            'Ты первый пользователь — роль admin/owner. Открой /admin-zone',
             ...n,
           ])
         }

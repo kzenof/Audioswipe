@@ -6,7 +6,7 @@ const API_TIMEOUT_MS = 90_000
 export interface ApiUser {
   id: number
   email: string
-  role: 'listener' | 'artist' | 'admin'
+  role: 'listener' | 'artist' | 'admin' | 'owner'
   artistName: string | null
   mainRole: string | null
   dawSoftware: string | null

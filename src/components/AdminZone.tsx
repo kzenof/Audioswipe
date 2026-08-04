@@ -11,6 +11,7 @@ import {
   apiAdminUsers,
 } from '../lib/api'
 import type { AdminUserRow, PlatformReport } from '../types'
+import { isStaffRole } from '../types'
 import { NotFoundPage } from './NotFoundPage'
 
 type AdminTab = 'users' | 'reports'
@@ -63,7 +64,7 @@ export function AdminZone() {
   }, [authToken])
 
   useEffect(() => {
-    if (accountRole !== 'admin' || !authToken) return
+    if (!isStaffRole(accountRole) || !authToken) return
     if (tab === 'users') void loadUsers()
     else void loadReports()
   }, [accountRole, authToken, tab, loadUsers, loadReports])
@@ -76,7 +77,7 @@ export function AdminZone() {
     )
   }
 
-  if (accountRole !== 'admin') {
+  if (!isStaffRole(accountRole)) {
     if (!authToken) {
       return (
         <AdminLoginForm
@@ -188,11 +189,11 @@ export function AdminZone() {
                     <td>{u.artistName ?? '—'}</td>
                     <td>{u.role}</td>
                     <td>
-                      {u.role === 'artist' || u.role === 'admin' ? (
+                      {u.role === 'artist' || isStaffRole(u.role) ? (
                         <button
                           type="button"
                           className={`admin-toggle ${u.canUpload ? 'is-on' : 'is-off'}`}
-                          disabled={u.role === 'admin'}
+                          disabled={isStaffRole(u.role)}
                           onClick={() => void toggleUpload(u)}
                         >
                           {u.canUpload ? 'Разрешено' : 'Запрещено'}
