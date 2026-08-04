@@ -27,6 +27,15 @@ app.use(
 )
 app.use(express.json())
 
+app.get('/', (_req, res) => {
+  res.json({
+    service: 'audioswipe-api',
+    ok: true,
+    health: '/api/health',
+    frontend: 'https://audioswipe.vercel.app',
+  })
+})
+
 app.get('/api/health', async (_req, res) => {
   let db = false
   try {

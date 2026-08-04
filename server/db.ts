@@ -1,11 +1,20 @@
+import dns from 'node:dns'
 import pg from 'pg'
 
+// Render не ходит в IPv6 — Supabase/Neon часто отдают AAAA-запись первой
+dns.setDefaultResultOrder('ipv4first')
+
+const databaseUrl = process.env.DATABASE_URL
+const isLocal =
+  !databaseUrl || /localhost|127\.0\.0\.1/.test(databaseUrl)
+
+const useSsl =
+  process.env.DATABASE_SSL === 'true' ||
+  (!isLocal && process.env.DATABASE_SSL !== 'false')
+
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.DATABASE_SSL === 'true'
-      ? { rejectUnauthorized: false }
-      : undefined,
+  connectionString: databaseUrl,
+  ssl: useSsl ? { rejectUnauthorized: false } : undefined,
 })
 
 export interface DbUser {
@@ -35,8 +44,8 @@ export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
 }
 
 export async function checkDbConnection() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL не задан — укажи PostgreSQL в .env')
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL не задан — укажи PostgreSQL в Environment на Render')
   }
   await query('SELECT 1')
 }
