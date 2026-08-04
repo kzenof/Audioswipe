@@ -2,10 +2,6 @@ import type { Response } from 'express'
 import { authFromHeader, findUserById } from './auth.js'
 import { query } from './db.js'
 
-import type { Response } from 'express'
-import { authFromHeader, findUserById } from './auth.js'
-import { query } from './db.js'
-
 /** admin и owner — доступ в админ-панель */
 export function isStaffRole(role: string) {
   return role === 'admin' || role === 'owner'
