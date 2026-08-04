@@ -29,7 +29,7 @@ app.post('/api/auth/register', async (req, res) => {
     return
   }
   const result = await registerUser({
-    email: login,
+    login,
     password: String(password ?? ''),
     role,
     artistName,

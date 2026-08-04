@@ -181,9 +181,9 @@ export const POPULARITY_LABELS: Record<
   },
   local: {
     title: 'Локальные',
-    short: 'SoundLink',
-    range: 'SoundLink',
-    hint: 'Демки артистов, загруженные прямо на сайт.',
+    short: 'Локальные',
+    range: 'на сайте',
+    hint: 'Демки артистов, загруженные прямо на Audioswipe.',
   },
 }
 

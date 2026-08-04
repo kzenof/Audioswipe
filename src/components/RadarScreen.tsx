@@ -31,10 +31,10 @@ export function RadarScreen() {
   return (
     <section className="radar">
       <header className="radar__head">
-        <p className="radar__eyebrow">Яндекс Музыка · SoundLink</p>
+        <p className="radar__eyebrow">blind listen</p>
         <h2 className="radar__title">Настрой свой радар</h2>
         <p className="radar__sub">
-          Шесть слоёв глубины по слушателям за месяц — потом слушай вслепую.
+          Выбери глубину и жанры — потом слушай вслепую.
         </p>
       </header>
 
@@ -80,7 +80,7 @@ export function RadarScreen() {
 
       <div className="radar__block">
         <h3>Жанры</h3>
-        <p className="radar__hint">Пусто = все жанры. Данные как в каталоге Яндекс Музыки.</p>
+        <p className="radar__hint">Пусто = все жанры.</p>
         <div className="radar__genres">
           {GENRE_TAGS.map((g) => (
             <button
@@ -106,7 +106,7 @@ export function RadarScreen() {
       </button>
       {radarLoading && (
         <p className="radar__hint" style={{ marginTop: '0.75rem', textAlign: 'center' }}>
-          Тянем треки из Яндекса и проверяем слушателей за месяц
+          Подбираем треки под твои настройки…
         </p>
       )}
     </section>

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import bcrypt from 'bcrypt'
 import type { Response } from 'express'
-import { normEmail, query, type DbUser } from './db.js'
+import { normLogin, query, type DbUser } from './db.js'
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'audioswipe-dev-secret-change-me'
 
@@ -58,12 +58,15 @@ export async function checkPassword(password: string, hash: string) {
   return bcrypt.compare(password, hash)
 }
 
-export async function findUserByEmail(email: string) {
+export async function findUserByLogin(login: string) {
   const result = await query<DbUser>('SELECT * FROM users WHERE email = $1', [
-    normEmail(email),
+    normLogin(login),
   ])
   return result.rows[0]
 }
+
+/** @deprecated use findUserByLogin */
+export const findUserByEmail = findUserByLogin
 
 export async function findUserById(id: number) {
   const result = await query<DbUser>('SELECT * FROM users WHERE id = $1', [id])
@@ -84,7 +87,7 @@ export function publicUser(u: DbUser) {
 }
 
 export interface RegisterInput {
-  email: string
+  login: string
   password: string
   role: 'listener' | 'artist'
   artistName?: string
@@ -93,15 +96,26 @@ export interface RegisterInput {
   statusTag?: string
 }
 
-export async function registerUser(input: RegisterInput) {
-  const email = normEmail(input.email)
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: false as const, error: 'Некорректный логин (email)' }
+function validateLogin(login: string) {
+  const trimmed = login.trim()
+  if (trimmed.length < 3) return 'Логин — минимум 3 символа'
+  if (trimmed.length > 32) return 'Логин — максимум 32 символа'
+  if (!/^[a-zA-Z0-9_а-яА-ЯёЁ-]+$/.test(trimmed)) {
+    return 'Логин: только буквы, цифры, _ и -'
   }
+  return null
+}
+
+export async function registerUser(input: RegisterInput) {
+  const loginErr = validateLogin(input.login)
+  if (loginErr) {
+    return { ok: false as const, error: loginErr }
+  }
+  const login = normLogin(input.login)
   if (input.password.length < 4) {
     return { ok: false as const, error: 'Пароль — минимум 4 символа' }
   }
-  if (await findUserByEmail(email)) {
+  if (await findUserByLogin(login)) {
     return { ok: false as const, error: 'Такой логин уже занят' }
   }
 
@@ -111,10 +125,10 @@ export async function registerUser(input: RegisterInput) {
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
     [
-      email,
+      login,
       hash,
       input.role,
-      input.role === 'artist' ? input.artistName ?? email.split('@')[0] : null,
+      input.role === 'artist' ? input.artistName ?? login : null,
       input.role === 'artist' ? input.mainRole ?? null : null,
       input.role === 'artist' ? input.dawSoftware ?? null : null,
       input.role === 'artist' ? input.statusTag ?? null : null,
@@ -125,9 +139,8 @@ export async function registerUser(input: RegisterInput) {
   return { ok: true as const, user, token: signToken(user) }
 }
 
-/** Заготовка под 2FA — таблица auth_codes уже в schema.sql */
-export async function loginUser(email: string, password: string) {
-  const user = await findUserByEmail(email)
+export async function loginUser(login: string, password: string) {
+  const user = await findUserByLogin(login)
   if (!user || !(await checkPassword(password, user.password_hash))) {
     return { ok: false as const, error: 'Неверный логин или пароль' }
   }

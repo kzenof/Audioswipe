@@ -20,9 +20,12 @@ export interface DbUser {
   created_at: Date | string
 }
 
-export function normEmail(email: string) {
-  return email.trim().toLowerCase()
+export function normLogin(login: string) {
+  return login.trim().toLowerCase()
 }
+
+/** @deprecated use normLogin */
+export const normEmail = normLogin
 
 export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,

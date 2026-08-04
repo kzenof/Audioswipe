@@ -293,9 +293,7 @@ export function ListenerSpace() {
               )}
             </button>
             <p className="roulette__hint">
-              {currentTrack.source === 'soundlink'
-                ? 'SoundLink · локальное демо · без имени до мэтча'
-                : 'Яндекс · скрытый поток · имя только после мэтча'}
+              Имя артиста скрыто — раскроется после мэтча
             </p>
           </div>
           <div className="roulette__actions">
@@ -384,12 +382,9 @@ export function ListenerSpace() {
             <p className="reveal__meta">
               {currentTrack.title} · {currentTrack.genre}
               {currentTrack.source === 'yandex' && (
-                <>
-                  {' '}
-                  · Яндекс · {formatListeners(currentTrack.monthlyListeners)} / мес
-                </>
+                <> · {formatListeners(currentTrack.monthlyListeners)} слушателей / мес</>
               )}
-              {currentTrack.source === 'soundlink' && <> · SoundLink</>}
+              {currentTrack.source === 'soundlink' && <> · Локальное демо</>}
             </p>
             <div className="streaming-links">
               {currentTrack.streaming.yandex && (

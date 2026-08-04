@@ -51,8 +51,8 @@ export function AuthModal({ intendedRole, onClose }: Props) {
         <h2 id="auth-title">{title}</h2>
         <p className="modal__sub">
           {mode === 'login'
-            ? 'Вход по логину и паролю.'
-            : 'Создай аккаунт — данные сохраняются в PostgreSQL.'}
+            ? 'Введи логин и пароль.'
+            : 'Придумай логин и пароль — и начинай слушать или загружать демо.'}
         </p>
 
         <div className="auth-tabs">
@@ -80,16 +80,17 @@ export function AuthModal({ intendedRole, onClose }: Props) {
 
         <form className="auth-modal__form" onSubmit={(e) => void handleSubmit(e)}>
           <label className="field">
-            <span>Логин (email)</span>
+            <span>Логин</span>
             <input
               ref={loginRef}
               className="input"
-              type="email"
+              type="text"
               value={loginValue}
               onChange={(e) => setLoginValue(e.target.value)}
               autoComplete="username"
               required
-              placeholder="you@mail.com"
+              minLength={3}
+              placeholder="твой_логин"
             />
           </label>
           <label className="field">
@@ -112,6 +113,14 @@ export function AuthModal({ intendedRole, onClose }: Props) {
             {loading ? '…' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
           </button>
         </form>
+
+        <div className="auth-modal__soon">
+          <p className="auth-modal__soon-label">Скоро для безопасности</p>
+          <button type="button" className="auth-btn auth-btn--email" disabled>
+            Вход по почте
+            <span className="auth-badge">скоро</span>
+          </button>
+        </div>
 
         <button type="button" className="modal__close" onClick={onClose}>
           закрыть

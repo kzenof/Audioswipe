@@ -152,8 +152,7 @@ export function ArtistSpace() {
           <div className="studio__upload">
             <h2>Студия · {user}</h2>
             <p>
-              Только твои демо. Чужой кабинет их не увидит — только радар
-              «Локальные (SoundLink)» у других слушателей.
+              Загружай демо — другие слушатели увидят их в радаре «Локальные».
             </p>
             <label className="field">
               <span>Жанр для радара</span>
@@ -214,7 +213,7 @@ export function ArtistSpace() {
                     >
                       <strong>{t.title}</strong>
                       <span>
-                        {t.genre} · SoundLink
+                        {t.genre} · Локальное
                       </span>
                     </button>
                   </li>

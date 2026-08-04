@@ -352,7 +352,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           login: loginName,
           password,
           role: nextRole,
-          artistName: loginName.split('@')[0],
+          artistName: loginName,
         })
         ensureLocalCabinet(user.email)
         enterAccount(user.email, nextRole, token, user.id)
@@ -497,7 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!queue.length) {
         setNotifications((n) => [
           radar.popularity === 'local'
-            ? 'В SoundLink пока нет чужих демо — загрузи с другого аккаунта или смени фильтр'
+            ? 'Пока нет чужих демо — загрузи с другого аккаунта или смени фильтр'
             : 'По фильтру слушателей треков не нашлось — смени тир/жанр',
           ...n,
         ])
@@ -509,7 +509,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const msg = e instanceof Error ? e.message : String(e)
       setNotifications((n) => [
         `Радар: ${msg.includes('кандидат') || msg.includes('abort') || msg.includes('ETIMEDOUT') || msg.includes('502')
-          ? 'Яндекс не ответил вовремя — нажми ещё раз (без жанра или «Хитмейкеры» / «Стадионы» стабильнее)'
+          ? 'Сервис не ответил вовремя — попробуй ещё раз или смени фильтр'
           : msg}`,
         ...n,
       ])
@@ -757,7 +757,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMyTracks((t) => ownTracksOnly(user, [published, ...t]))
       setFeedTracks((f) => [published, ...f.filter((x) => x.id !== published.id)])
       setNotifications((n) => [
-        `«${name}» в SoundLink. Другие аккаунты увидят его в радаре «Локальные»`,
+        `«${name}» загружено. Другие слушатели увидят его в радаре «Локальные»`,
         ...n,
       ])
     },
