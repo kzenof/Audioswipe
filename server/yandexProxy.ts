@@ -1,5 +1,5 @@
-import type { Plugin } from 'vite'
 import { createHash, createHmac } from 'node:crypto'
+import type { Express, Request, Response } from 'express'
 
 const YM_CLIENT = 'YandexMusicDesktop/24023621'
 const STREAM_SIGN_SECRET = 'p93jhgh689SBReK6ghtw62'
@@ -95,69 +95,74 @@ async function cachedDirectUrl(trackId: string) {
   return url
 }
 
-/**
- * Путь 1: скрытый аудиопоток.
- * GET /ym-stream/:trackId → редирект / прокси mp3 с Яндекса.
- */
-export function yandexStreamPlugin(): Plugin {
-  return {
-    name: 'yandex-stream',
-    configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        const raw = req.url?.split('?')[0] ?? ''
-        const match = raw.match(/^\/ym-stream\/([^/]+)\/?$/)
-        if (!match) return next()
-
-        const trackId = decodeURIComponent(match[1])
-        try {
-          const direct = await cachedDirectUrl(trackId)
-          const range = req.headers.range
-          const upstream = await fetch(direct, {
-            headers: range ? { Range: String(range) } : undefined,
-          })
-
-          res.statusCode = upstream.status
-          const pass = [
-            'content-type',
-            'content-length',
-            'accept-ranges',
-            'content-range',
-            'cache-control',
-          ]
-          for (const h of pass) {
-            const v = upstream.headers.get(h)
-            if (v) res.setHeader(h, v)
-          }
-          res.setHeader('Access-Control-Allow-Origin', '*')
-
-          if (!upstream.body) {
-            res.end()
-            return
-          }
-
-          const reader = upstream.body.getReader()
-          const pump = async (): Promise<void> => {
-            const { done, value } = await reader.read()
-            if (done) {
-              res.end()
-              return
-            }
-            res.write(Buffer.from(value))
-            await pump()
-          }
-          await pump()
-        } catch (e) {
-          res.statusCode = 502
-          res.setHeader('Content-Type', 'application/json')
-          res.end(
-            JSON.stringify({
-              error: 'yandex_stream_failed',
-              message: e instanceof Error ? e.message : String(e),
-              hint: 'Задай YANDEX_MUSIC_TOKEN в .env — без OAuth Яндекс отвечает no-rights',
-            }),
-          )
-        }
+/** Прокси JSON API Яндекс Музыки (обход CORS на проде). */
+export function registerYmApiProxy(app: Express) {
+  app.use('/ym-api', async (req, res) => {
+    const path = req.path || '/'
+    const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
+    try {
+      const upstream = await fetch(`https://api.music.yandex.net${path}${qs}`, {
+        method: req.method === 'HEAD' ? 'GET' : req.method,
+        headers: ymHeaders(),
       })
-    },
+      const body = Buffer.from(await upstream.arrayBuffer())
+      res.status(upstream.status)
+      const ct = upstream.headers.get('content-type')
+      if (ct) res.setHeader('Content-Type', ct)
+      res.setHeader('Cache-Control', 'public, max-age=60')
+      res.send(body)
+    } catch (e) {
+      res.status(502).json({
+        error: 'yandex_api_failed',
+        message: e instanceof Error ? e.message : String(e),
+      })
+    }
+  })
+}
+
+/**
+ * GET /ym-stream/:trackId → 302 на прямой mp3 (или прокси при ?proxy=1).
+ * Нужен YANDEX_MUSIC_TOKEN, иначе Яндекс отвечает no-rights.
+ */
+export async function handleYmStream(req: Request, res: Response) {
+  const trackId = decodeURIComponent(String(req.params.trackId ?? ''))
+  if (!trackId) {
+    res.status(400).json({ error: 'trackId required' })
+    return
+  }
+  try {
+    const direct = await cachedDirectUrl(trackId)
+    if (req.query.proxy === '1') {
+      const range = req.headers.range
+      const upstream = await fetch(direct, {
+        headers: range ? { Range: String(range) } : undefined,
+      })
+      res.status(upstream.status)
+      for (const h of [
+        'content-type',
+        'content-length',
+        'accept-ranges',
+        'content-range',
+        'cache-control',
+      ]) {
+        const v = upstream.headers.get(h)
+        if (v) res.setHeader(h, v)
+      }
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      const buf = Buffer.from(await upstream.arrayBuffer())
+      res.send(buf)
+      return
+    }
+    res.redirect(302, direct)
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    const needsToken = /no-rights|not-allowed|Unauthorized/i.test(message)
+    res.status(502).json({
+      error: 'yandex_stream_failed',
+      message,
+      hint: needsToken
+        ? 'Яндекс вернул no-rights: задай YANDEX_MUSIC_TOKEN (OAuth) в env Vercel'
+        : undefined,
+    })
   }
 }

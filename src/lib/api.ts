@@ -1,5 +1,4 @@
-const API_BASE =
-  import.meta.env.VITE_API_URL ?? 'https://audioswipe.onrender.com/api'
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
 const API_TIMEOUT_MS = 90_000
 
@@ -25,11 +24,11 @@ async function apiFetch(input: string, init?: RequestInit) {
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {
       throw new Error(
-        'Сервер не ответил вовремя. На Render free tier первый запуск может занять до минуты — подожди и попробуй снова.',
+        'Сервер не ответил вовремя. Подожди и попробуй снова.',
       )
     }
     throw new Error(
-      'Не удалось связаться с сервером. Проверь, что бэкенд на Render запущен.',
+      'Не удалось связаться с сервером. Проверь деплой API на Vercel.',
     )
   } finally {
     clearTimeout(timeout)

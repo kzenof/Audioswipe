@@ -5,7 +5,7 @@ import { ReportModal } from './ReportModal'
 import { EMOJI_TAGS } from '../data/mock'
 import { useApp } from '../context/AppContext'
 import { POPULARITY_LABELS, SOCIAL_PLATFORMS, getTrackPreviewWindow } from '../types'
-import { formatListeners, yandexStreamUrl } from '../lib/yandex'
+import { formatListeners, yandexEmbedUrl, yandexStreamUrl } from '../lib/yandex'
 
 type Tab = 'scout' | 'finds'
 
@@ -41,6 +41,7 @@ export function ListenerSpace() {
   const [revealBurst, setRevealBurst] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [findsPlaying, setFindsPlaying] = useState<string | null>(null)
+  const [embedFallback, setEmbedFallback] = useState(false)
   const timerRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hiddenAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -73,6 +74,7 @@ export function ListenerSpace() {
       setSelectedEmojis([])
       setComment('')
       setRevealBurst(false)
+      setEmbedFallback(false)
       stopAllAudio()
     }
   }, [listenerPhase, currentTrack?.id])
@@ -149,8 +151,22 @@ export function ListenerSpace() {
       if (currentTrack.source === 'yandex' && currentTrack.yandexTrackId) {
         const ok = await playHidden(yandexStreamUrl(currentTrack.yandexTrackId))
         if (!ok && !cancelled) {
-          // без звука не крутим «пустой» таймер как будто играет
-          setPlaying(false)
+          // без OAuth Яндекс даёт no-rights — официальный iframe как запасной путь
+          setEmbedFallback(true)
+          setPlaying(true)
+          setProgress(0)
+          const clip = Math.min(currentTrack.duration || 30, 45)
+          const started = Date.now()
+          timerRef.current = window.setInterval(() => {
+            const p = Math.min(1, (Date.now() - started) / (clip * 1000))
+            setProgress(p)
+            setListenProgress(p)
+            if (p >= 1) {
+              stopTimers()
+              setPlaying(false)
+              markListenedToEnd()
+            }
+          }, 50)
         }
         return
       }
@@ -227,6 +243,34 @@ export function ListenerSpace() {
     <div className="space listener-space">
       {/* Путь 1: скрытый аудиопоток Яндекса — без названия на экране */}
       <audio ref={hiddenAudioRef} id="hidden-player" preload="none" hidden />
+
+      {embedFallback &&
+        currentTrack?.source === 'yandex' &&
+        currentTrack.yandexTrackId &&
+        listenerPhase === 'roulette' && (
+          <div
+            className="ym-embed-fallback"
+            style={{
+              position: 'fixed',
+              left: 12,
+              right: 12,
+              bottom: 12,
+              zIndex: 40,
+              maxWidth: 420,
+              margin: '0 auto',
+            }}
+          >
+            <iframe
+              title="Yandex Music preview"
+              src={yandexEmbedUrl(currentTrack.yandexTrackId, currentTrack.yandexAlbumId)}
+              width="100%"
+              height="120"
+              frameBorder="0"
+              allow="clipboard-write; autoplay"
+              style={{ borderRadius: 12, border: '0', display: 'block' }}
+            />
+          </div>
+        )}
 
       <header className="space-nav">
         <button type="button" className="brand-mini" onClick={goHome}>

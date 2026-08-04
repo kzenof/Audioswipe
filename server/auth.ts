@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import type { Response } from 'express'
 import { normLogin, query, type DbUser } from './db.js'
 import { parseSocialLinks } from './profile.js'

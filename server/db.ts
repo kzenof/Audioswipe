@@ -38,7 +38,7 @@ function parseDatabaseUrl(raw: string) {
 async function createPool(): Promise<pg.Pool> {
   const databaseUrl = process.env.DATABASE_URL
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL не задан — укажи PostgreSQL в Environment на Render')
+    throw new Error('DATABASE_URL не задан — укажи PostgreSQL в Environment на Vercel')
   }
 
   const cfg = parseDatabaseUrl(databaseUrl)
@@ -46,7 +46,7 @@ async function createPool(): Promise<pg.Pool> {
 
   if (!cfg.isLocal && cfg.hostname.startsWith('db.') && cfg.hostname.endsWith('.supabase.co')) {
     console.warn(
-      'DB: Supabase Direct — только IPv6, Render не достучится. ' +
+      'DB: Supabase Direct — только IPv6, serverless может не достучаться. ' +
         'Используй pooler из Supabase → Connect → Session pooler.',
     )
   }
