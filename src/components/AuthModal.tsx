@@ -25,6 +25,7 @@ export function AuthModal({ intendedRole, onClose }: Props) {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (loading) return
     setError('')
     setLoading(true)
     try {

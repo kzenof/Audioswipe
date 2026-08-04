@@ -9,7 +9,7 @@ import {
   requireAuth,
 } from './auth.js'
 import { addToBlacklist, listBlacklist } from './blacklist.js'
-import { checkDbConnection } from './db.js'
+import { checkDbConnection, query } from './db.js'
 
 const app = express()
 const PORT = Number(process.env.PORT ?? 3001)
@@ -27,8 +27,15 @@ app.use(
 )
 app.use(express.json())
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'audioswipe-api' })
+app.get('/api/health', async (_req, res) => {
+  let db = false
+  try {
+    await query('SELECT 1')
+    db = true
+  } catch {
+    db = false
+  }
+  res.json({ ok: true, service: 'audioswipe-api', db })
 })
 
 app.post('/api/auth/register', async (req, res) => {
@@ -95,10 +102,16 @@ app.post('/api/blacklist', async (req, res) => {
 })
 
 async function main() {
-  await checkDbConnection()
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`Audioswipe API :${PORT}`)
   })
+
+  try {
+    await checkDbConnection()
+    console.log('Database connected')
+  } catch (e) {
+    console.error('Database connection failed — auth routes will not work:', e)
+  }
 }
 
 void main().catch((e) => {
