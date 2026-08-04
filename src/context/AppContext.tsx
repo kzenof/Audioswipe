@@ -8,10 +8,14 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
+  apiCheckUpload,
   apiLogin,
   apiRegister,
   apiMe,
+  apiSubmitReport,
+  type ApiUser,
 } from '../lib/api'
 import {
   emptyCabinet,
@@ -52,6 +56,7 @@ import {
 } from '../lib/reviews'
 import {
   normalizePopularityTier,
+  type AccountRole,
   type ArtistTab,
   type ChatMessage,
   type CollabProfile,
@@ -72,12 +77,16 @@ type AuthOk = { ok: true }
 interface AppState {
   user: string | null
   role: Role
+  accountRole: AccountRole | null
+  authToken: string | null
+  canUpload: boolean
   login: (login: string, password: string, role: Exclude<Role, null>) => Promise<AuthOk | AuthFail>
   register: (login: string, password: string, role: Exclude<Role, null>) => Promise<AuthOk | AuthFail>
   logout: () => void
   switchToListener: () => void
   switchToArtist: () => void
   goHome: () => void
+  submitReport: (track: Track, reason: string) => Promise<void>
 
   radar: RadarFilters
   setRadarPopularity: (p: RadarFilters['popularity']) => void
@@ -145,8 +154,12 @@ const FALLBACK_PROFILE: CollabProfile = {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate()
   const [user, setUser] = useState<string | null>(null)
   const [role, setRole] = useState<Role>(null)
+  const [accountRole, setAccountRole] = useState<AccountRole | null>(null)
+  const [canUpload, setCanUpload] = useState(true)
+  const [authToken, setAuthToken] = useState<string | null>(null)
   const [cabinetReady, setCabinetReady] = useState(false)
 
   const [radar, setRadar] = useState<RadarFilters>(defaultRadar)
@@ -232,9 +245,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const cabinet = acc?.cabinet ?? ensureLocalCabinet(apiUser.email)
         persistSkip.current = true
         authTokenRef.current = s.token!
+        setAuthToken(s.token!)
         userIdRef.current = s.userId ?? apiUser.id
         setUser(apiUser.email)
-        setRole(s.role ?? apiUser.role)
+        setAccountRole(apiUser.role)
+        setCanUpload(apiUser.canUpload)
+        setRole(s.role ?? (apiUser.role === 'admin' ? null : apiUser.role === 'artist' ? 'artist' : 'listener'))
         applyCabinet(apiUser.email, cabinet)
         await loadBlacklistFromApi(s.token!)
         void refreshFeed()
@@ -288,20 +304,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const enterAccount = useCallback(
     (
-      email: string,
+      apiUser: ApiUser,
       nextRole: Exclude<Role, null>,
       token: string,
-      userId: number,
     ) => {
       persistSkip.current = true
       authTokenRef.current = token
-      userIdRef.current = userId
+      setAuthToken(token)
+      userIdRef.current = apiUser.id
+      const email = apiUser.email
       const acc = findAccount(email)
       const cabinet = acc?.cabinet ?? ensureLocalCabinet(email)
       setUser(email)
+      setAccountRole(apiUser.role)
+      setCanUpload(apiUser.canUpload)
       setRole(nextRole)
       applyCabinet(email, cabinet)
-      setSession({ login: email, role: nextRole, token, userId })
+      setSession({ login: email, role: nextRole, token, userId: apiUser.id })
       setNotifications([])
       void loadBlacklistFromApi(token).catch(() => clearBlacklistCache())
       void refreshFeed()
@@ -329,7 +348,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const { token, user } = await apiLogin(loginName, password)
         ensureLocalCabinet(user.email)
-        enterAccount(user.email, nextRole, token, user.id)
+        enterAccount(user, nextRole, token)
         return { ok: true }
       } catch (e) {
         return {
@@ -355,7 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           artistName: loginName,
         })
         ensureLocalCabinet(user.email)
-        enterAccount(user.email, nextRole, token, user.id)
+        enterAccount(user, nextRole, token)
         return { ok: true }
       } catch (e) {
         return {
@@ -370,10 +389,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setSession(null)
     authTokenRef.current = null
+    setAuthToken(null)
     userIdRef.current = null
     clearBlacklistCache()
     setUser(null)
     setRole(null)
+    setAccountRole(null)
+    setCanUpload(true)
     setDiscoveries([])
     setMyTracks([])
     setCollabProfile(FALLBACK_PROFILE)
@@ -393,7 +415,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRole(null)
     setListenerPhase('radar')
     setTrackQueue([])
-  }, [])
+    navigate('/')
+  }, [navigate])
 
   const setRadarPopularity = useCallback((p: RadarFilters['popularity']) => {
     setRadar((r) => ({ ...r, popularity: p }))
@@ -729,6 +752,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addMyTrack = useCallback(
     async (file: File, title?: string, genreTag: GenreTag = 'Рэп') => {
       if (!user) return
+      const token = authTokenRef.current
+      if (token) {
+        const check = await apiCheckUpload(token)
+        if (!check.allowed) {
+          setNotifications((n) => [
+            check.error ?? 'Вы заблокированы за нарушение правил',
+            ...n,
+          ])
+          setCanUpload(false)
+          return
+        }
+      } else if (!canUpload) {
+        setNotifications((n) => [
+          'Вы заблокированы за нарушение правил',
+          ...n,
+        ])
+        return
+      }
       const name = title?.trim() || file.name.replace(/\.[^.]+$/, '')
       const base: Track = {
         id: `mine-${user}-${Date.now()}`,
@@ -761,7 +802,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...n,
       ])
     },
-    [user, collabProfile, focusFeedback],
+    [user, collabProfile, focusFeedback, canUpload],
+  )
+
+  const submitReport = useCallback(
+    async (track: Track, reason: string) => {
+      const token = authTokenRef.current
+      if (!token || !user) {
+        throw new Error('Войдите, чтобы отправить жалобу')
+      }
+      await apiSubmitReport(token, {
+        reason,
+        trackId: track.id,
+        trackTitle: track.title,
+        reportedLogin:
+          track.source === 'soundlink' ? track.artistId : undefined,
+      })
+      setNotifications((n) => ['Жалоба отправлена модераторам', ...n])
+    },
+    [user],
   )
 
   const proposeFit = useCallback(
@@ -874,12 +933,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       role,
+      accountRole,
+      authToken,
+      canUpload,
       login,
       register,
       logout,
       switchToListener,
       switchToArtist,
       goHome,
+      submitReport,
       radar,
       setRadarPopularity,
       toggleRadarGenre,
@@ -930,12 +993,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       user,
       role,
+      accountRole,
+      authToken,
+      canUpload,
       login,
       register,
       logout,
       switchToListener,
       switchToArtist,
       goHome,
+      submitReport,
       radar,
       setRadarPopularity,
       toggleRadarGenre,

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NeonWave } from './NeonWave'
 import { AuthModal } from './AuthModal'
+import { Footer } from './Footer'
 import { useApp } from '../context/AppContext'
 import type { Role } from '../types'
 
@@ -67,6 +68,8 @@ export function WelcomeScreen() {
           </button>
         </div>
       </div>
+
+      <Footer />
 
       {authRole && (
         <AuthModal intendedRole={authRole} onClose={() => setAuthRole(null)} />

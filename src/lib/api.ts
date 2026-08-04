@@ -6,11 +6,12 @@ const API_TIMEOUT_MS = 90_000
 export interface ApiUser {
   id: number
   email: string
-  role: 'listener' | 'artist'
+  role: 'listener' | 'artist' | 'admin'
   artistName: string | null
   mainRole: string | null
   dawSoftware: string | null
   statusTag: string | null
+  canUpload: boolean
   createdAt: string
 }
 
@@ -41,6 +42,10 @@ async function parseJson<T>(res: Response): Promise<T> {
   return data
 }
 
+function authHeaders(token: string) {
+  return { Authorization: `Bearer ${token}` }
+}
+
 export async function apiRegister(body: {
   login: string
   password: string
@@ -69,15 +74,26 @@ export async function apiLogin(login: string, password: string) {
 export async function apiMe(token: string) {
   return parseJson<{ user: ApiUser }>(
     await apiFetch(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     }),
   )
+}
+
+export async function apiCheckUpload(token: string) {
+  const res = await apiFetch(`${API_BASE}/auth/upload-check`, {
+    headers: authHeaders(token),
+  })
+  const data = (await res.json()) as { allowed?: boolean; error?: string }
+  if (!res.ok) {
+    return { allowed: false, error: data.error ?? 'Загрузка запрещена' }
+  }
+  return { allowed: Boolean(data.allowed), error: null as string | null }
 }
 
 export async function apiGetBlacklist(token: string) {
   return parseJson<{ yandexArtistIds: string[] }>(
     await apiFetch(`${API_BASE}/blacklist`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     }),
   )
 }
@@ -88,9 +104,82 @@ export async function apiBlockArtist(token: string, yandexArtistId: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        ...authHeaders(token),
       },
       body: JSON.stringify({ yandexArtistId }),
+    }),
+  )
+}
+
+export async function apiSubmitReport(
+  token: string,
+  body: {
+    reason: string
+    trackId?: string
+    trackTitle?: string
+    reportedLogin?: string
+  },
+) {
+  return parseJson<{ ok: true }>(
+    await apiFetch(`${API_BASE}/reports`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(token),
+      },
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function apiAdminUsers(token: string, search = '') {
+  const q = search.trim() ? `?search=${encodeURIComponent(search)}` : ''
+  return parseJson<{ users: import('../types').AdminUserRow[] }>(
+    await apiFetch(`${API_BASE}/admin/users${q}`, {
+      headers: authHeaders(token),
+    }),
+  )
+}
+
+export async function apiAdminSetUpload(
+  token: string,
+  userId: number,
+  canUpload: boolean,
+) {
+  return parseJson<{ user: ApiUser }>(
+    await apiFetch(`${API_BASE}/admin/users/${userId}/upload`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(token),
+      },
+      body: JSON.stringify({ canUpload }),
+    }),
+  )
+}
+
+export async function apiAdminReports(token: string) {
+  return parseJson<{ reports: import('../types').PlatformReport[] }>(
+    await apiFetch(`${API_BASE}/admin/reports`, {
+      headers: authHeaders(token),
+    }),
+  )
+}
+
+export async function apiAdminDismissReport(token: string, reportId: number) {
+  return parseJson<{ ok: true }>(
+    await apiFetch(`${API_BASE}/admin/reports/${reportId}`, {
+      method: 'DELETE',
+      headers: authHeaders(token),
+    }),
+  )
+}
+
+export async function apiAdminBanFromReport(token: string, reportId: number) {
+  return parseJson<{ ok: true }>(
+    await apiFetch(`${API_BASE}/admin/reports/${reportId}/ban`, {
+      method: 'POST',
+      headers: authHeaders(token),
     }),
   )
 }

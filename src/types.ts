@@ -1,4 +1,39 @@
 export type Role = 'listener' | 'artist' | null
+export type AccountRole = 'listener' | 'artist' | 'admin'
+
+export type ReportReason =
+  | 'Кража трека / авторское право'
+  | 'Ненависть / разжигание вражды'
+  | 'Другое нарушение правил'
+
+export type ReportStatus = 'pending' | 'dismissed' | 'actioned'
+
+export interface PlatformReport {
+  id: number
+  reporterLogin: string
+  reportedLogin: string | null
+  reportedArtistName: string | null
+  trackId: string | null
+  trackTitle: string | null
+  reason: string
+  status: ReportStatus
+  createdAt: string
+}
+
+export interface AdminUserRow {
+  id: number
+  login: string
+  role: AccountRole
+  artistName: string | null
+  canUpload: boolean
+  createdAt: string
+}
+
+export const REPORT_REASONS: ReportReason[] = [
+  'Кража трека / авторское право',
+  'Ненависть / разжигание вражды',
+  'Другое нарушение правил',
+]
 
 export type ArtistRole = 'Битмейкер' | 'Вокалист' | 'Сонграйтер' | 'Звукарь'
 

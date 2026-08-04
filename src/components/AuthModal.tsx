@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import type { Role } from '../types'
 
@@ -12,6 +13,7 @@ export function AuthModal({ intendedRole, onClose }: Props) {
   const [mode, setMode] = useState<'login' | 'register'>('register')
   const [loginValue, setLoginValue] = useState('')
   const [password, setPassword] = useState('')
+  const [acceptedRules, setAcceptedRules] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const loginRef = useRef<HTMLInputElement>(null)
@@ -26,6 +28,10 @@ export function AuthModal({ intendedRole, onClose }: Props) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (loading) return
+    if (mode === 'register' && !acceptedRules) {
+      setError('Нужно принять правила площадки')
+      return
+    }
     setError('')
     setLoading(true)
     try {
@@ -107,6 +113,22 @@ export function AuthModal({ intendedRole, onClose }: Props) {
               placeholder="••••••••"
             />
           </label>
+
+          {mode === 'register' && (
+            <label className="auth-rules-check">
+              <input
+                type="checkbox"
+                checked={acceptedRules}
+                onChange={(e) => setAcceptedRules(e.target.checked)}
+              />
+              <span>
+                Я согласен с{' '}
+                <Link to="/rules" target="_blank" rel="noreferrer">
+                  правилами площадки
+                </Link>
+              </span>
+            </label>
+          )}
 
           {error && <p className="auth-error">{error}</p>}
 

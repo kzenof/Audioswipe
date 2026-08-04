@@ -82,6 +82,7 @@ export function publicUser(u: DbUser) {
     mainRole: u.main_role,
     dawSoftware: u.daw_software,
     statusTag: u.status_tag,
+    canUpload: u.can_upload !== false,
     createdAt: u.created_at,
   }
 }
@@ -121,8 +122,8 @@ export async function registerUser(input: RegisterInput) {
 
   const hash = await hashPassword(input.password)
   const result = await query<DbUser>(
-    `INSERT INTO users (email, password_hash, role, artist_name, main_role, daw_software, status_tag)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO users (email, password_hash, role, artist_name, main_role, daw_software, status_tag, can_upload)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, true)
      RETURNING *`,
     [
       login,

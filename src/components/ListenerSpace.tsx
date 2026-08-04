@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NeonWave } from './NeonWave'
 import { RadarScreen } from './RadarScreen'
+import { ReportModal } from './ReportModal'
 import { EMOJI_TAGS } from '../data/mock'
 import { useApp } from '../context/AppContext'
 import { POPULARITY_LABELS } from '../types'
@@ -16,6 +17,7 @@ export function ListenerSpace() {
     likeTrack,
     skipTrack,
     blockArtist,
+    submitReport,
     submitFeedback,
     addToFinds,
     nextTrack,
@@ -37,6 +39,7 @@ export function ListenerSpace() {
   const [selectedEmojis, setSelectedEmojis] = useState<string[]>([])
   const [comment, setComment] = useState('')
   const [revealBurst, setRevealBurst] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [findsPlaying, setFindsPlaying] = useState<string | null>(null)
   const timerRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -329,8 +332,28 @@ export function ListenerSpace() {
             >
               🚫
             </button>
+            <button
+              type="button"
+              className="action-btn action-btn--report"
+              title={user ? 'Пожаловаться на трек' : 'Войдите, чтобы пожаловаться'}
+              aria-label="Пожаловаться"
+              onClick={() => {
+                if (!user) return
+                setReportOpen(true)
+              }}
+            >
+              ⚠️
+            </button>
           </div>
         </section>
+      )}
+
+      {reportOpen && currentTrack && (
+        <ReportModal
+          track={currentTrack}
+          onClose={() => setReportOpen(false)}
+          onSubmit={async (reason) => submitReport(currentTrack, reason)}
+        />
       )}
 
       {tab === 'scout' && listenerPhase === 'feedback' && currentTrack && (

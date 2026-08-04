@@ -42,6 +42,7 @@ export function ArtistSpace() {
     goHome,
     user,
     logout,
+    canUpload,
     getTrackReviews,
     refreshArtistStats,
   } = useApp()
@@ -154,6 +155,11 @@ export function ArtistSpace() {
             <p>
               Загружай демо — другие слушатели увидят их в радаре «Локальные».
             </p>
+            {!canUpload && (
+              <p className="studio__blocked">
+                Вы заблокированы за нарушение правил. Загрузка новых треков недоступна.
+              </p>
+            )}
             <label className="field">
               <span>Жанр для радара</span>
               <select
@@ -168,11 +174,12 @@ export function ArtistSpace() {
                 ))}
               </select>
             </label>
-            <label className="upload-zone">
+            <label className={`upload-zone ${!canUpload ? 'is-disabled' : ''}`}>
               <input
                 type="file"
                 accept="audio/*"
                 hidden
+                disabled={!canUpload}
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file) void addMyTrack(file, undefined, uploadGenre)
@@ -180,7 +187,7 @@ export function ArtistSpace() {
                 }}
               />
               <span className="upload-zone__plus">+</span>
-              <span>Перетащи трек или кликни</span>
+              <span>{canUpload ? 'Перетащи трек или кликни' : 'Загрузка заблокирована'}</span>
             </label>
             <label className="field">
               <span>Фокус фидбека</span>

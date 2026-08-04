@@ -12,11 +12,12 @@ export interface DbUser {
   id: number
   email: string
   password_hash: string
-  role: 'listener' | 'artist'
+  role: 'listener' | 'artist' | 'admin'
   artist_name: string | null
   main_role: string | null
   daw_software: string | null
   status_tag: string | null
+  can_upload: boolean | null
   created_at: Date | string
 }
 
