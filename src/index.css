@@ -656,6 +656,15 @@ a {
   color: var(--muted);
 }
 
+.roulette__stream-error {
+  margin: 0.75rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #ff8a8a;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .roulette__actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

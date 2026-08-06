@@ -5,7 +5,7 @@ import { ReportModal } from './ReportModal'
 import { EMOJI_TAGS } from '../data/mock'
 import { useApp } from '../context/AppContext'
 import { POPULARITY_LABELS, SOCIAL_PLATFORMS, getTrackPreviewWindow } from '../types'
-import { formatListeners, yandexEmbedUrl, yandexStreamUrl } from '../lib/yandex'
+import { formatListeners, yandexBlindStreamUrl } from '../lib/yandex'
 
 type Tab = 'scout' | 'finds'
 
@@ -41,7 +41,7 @@ export function ListenerSpace() {
   const [revealBurst, setRevealBurst] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [findsPlaying, setFindsPlaying] = useState<string | null>(null)
-  const [embedFallback, setEmbedFallback] = useState(false)
+  const [streamError, setStreamError] = useState<string | null>(null)
   const timerRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hiddenAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -65,6 +65,9 @@ export function ListenerSpace() {
       ha.removeAttribute('src')
       ha.load()
     }
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = null
+    }
   }
 
   useEffect(() => {
@@ -74,7 +77,7 @@ export function ListenerSpace() {
       setSelectedEmojis([])
       setComment('')
       setRevealBurst(false)
-      setEmbedFallback(false)
+      setStreamError(null)
       stopAllAudio()
     }
   }, [listenerPhase, currentTrack?.id])
@@ -94,6 +97,37 @@ export function ListenerSpace() {
       hiddenAudioRef.current?.pause()
     }
   }, [playing])
+
+  /** Скрываем название в системном плеере ОС / браузера */
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+
+    const blind =
+      listenerPhase === 'roulette' || listenerPhase === 'feedback'
+
+    if (blind && playing) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Слепое прослушивание',
+        artist: 'Audioswipe',
+        album: 'Радар',
+      })
+      return
+    }
+
+    if (listenerPhase === 'reveal' && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artistName,
+        album: 'Раскрытие',
+        artwork: currentTrack.avatar
+          ? [{ src: currentTrack.avatar, sizes: '512x512', type: 'image/png' }]
+          : [],
+      })
+      return
+    }
+
+    navigator.mediaSession.metadata = null
+  }, [listenerPhase, playing, currentTrack])
 
   useEffect(() => {
     if (!playing || !currentTrack || listenerPhase !== 'roulette') return
@@ -128,17 +162,30 @@ export function ListenerSpace() {
       }
     }
 
+    const applyBlindSession = () => {
+      if (!('mediaSession' in navigator)) return
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Слепое прослушивание',
+        artist: 'Audioswipe',
+        album: 'Радар',
+      })
+    }
+
     const playHidden = async (src: string) => {
       const el = hiddenAudioRef.current
       if (!el) return false
+      el.crossOrigin = 'anonymous'
       el.src = src
       el.currentTime = 0
+      el.onloadedmetadata = applyBlindSession
+      el.onplaying = applyBlindSession
       try {
         await el.play()
         if (cancelled) {
           el.pause()
           return false
         }
+        applyBlindSession()
         bindAudioProgress(el)
         return true
       } catch {
@@ -147,26 +194,17 @@ export function ListenerSpace() {
     }
 
     const run = async () => {
-      // Путь 1: Яндекс → скрытый <audio> через /ym-stream (download-info → mp3)
+      setStreamError(null)
+      // Яндекс → скрытый <audio> через /ym-stream?proxy=1 (mp3 через наш сервер)
       if (currentTrack.source === 'yandex' && currentTrack.yandexTrackId) {
-        const ok = await playHidden(yandexStreamUrl(currentTrack.yandexTrackId))
+        const ok = await playHidden(
+          yandexBlindStreamUrl(currentTrack.yandexTrackId),
+        )
         if (!ok && !cancelled) {
-          // без OAuth Яндекс даёт no-rights — официальный iframe как запасной путь
-          setEmbedFallback(true)
-          setPlaying(true)
-          setProgress(0)
-          const clip = Math.min(currentTrack.duration || 30, 45)
-          const started = Date.now()
-          timerRef.current = window.setInterval(() => {
-            const p = Math.min(1, (Date.now() - started) / (clip * 1000))
-            setProgress(p)
-            setListenProgress(p)
-            if (p >= 1) {
-              stopTimers()
-              setPlaying(false)
-              markListenedToEnd()
-            }
-          }, 50)
+          setPlaying(false)
+          setStreamError(
+            'Не удалось запустить превью. Проверь YANDEX_MUSIC_TOKEN на Render и перезапусти сервис.',
+          )
         }
         return
       }
@@ -184,6 +222,13 @@ export function ListenerSpace() {
             return
           }
           bindAudioProgress(audio, start, clipLen)
+          if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+              title: 'Слепое прослушивание',
+              artist: 'Audioswipe',
+              album: 'Радар',
+            })
+          }
         } catch {
           if (!cancelled) setPlaying(false)
         }
@@ -242,35 +287,7 @@ export function ListenerSpace() {
   return (
     <div className="space listener-space">
       {/* Путь 1: скрытый аудиопоток Яндекса — без названия на экране */}
-      <audio ref={hiddenAudioRef} id="hidden-player" preload="none" hidden />
-
-      {embedFallback &&
-        currentTrack?.source === 'yandex' &&
-        currentTrack.yandexTrackId &&
-        listenerPhase === 'roulette' && (
-          <div
-            className="ym-embed-fallback"
-            style={{
-              position: 'fixed',
-              left: 12,
-              right: 12,
-              bottom: 12,
-              zIndex: 40,
-              maxWidth: 420,
-              margin: '0 auto',
-            }}
-          >
-            <iframe
-              title="Yandex Music preview"
-              src={yandexEmbedUrl(currentTrack.yandexTrackId, currentTrack.yandexAlbumId)}
-              width="100%"
-              height="120"
-              frameBorder="0"
-              allow="clipboard-write; autoplay"
-              style={{ borderRadius: 12, border: '0', display: 'block' }}
-            />
-          </div>
-        )}
+      <audio ref={hiddenAudioRef} id="hidden-player" preload="none" hidden crossOrigin="anonymous" />
 
       <header className="space-nav">
         <button type="button" className="brand-mini" onClick={goHome}>
@@ -356,6 +373,11 @@ export function ListenerSpace() {
             <p className="roulette__hint">
               Имя артиста скрыто — раскроется после мэтча
             </p>
+            {streamError && (
+              <p className="roulette__stream-error" role="alert">
+                {streamError}
+              </p>
+            )}
           </div>
           <div className="roulette__actions">
             <button

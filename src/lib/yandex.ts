@@ -272,6 +272,15 @@ export function yandexStreamUrl(trackId: string) {
   return `${apiBase.replace(/\/api$/, '')}/ym-stream/${encodeURIComponent(trackId)}`
 }
 
+/** Стрим через наш бэкенд (proxy=1) — иначе <audio> не играет 302 на storage.yandex.net */
+export function yandexBlindStreamUrl(trackId: string) {
+  const url = yandexStreamUrl(trackId)
+  if (isYcFunctionsDirect(ymProxyBase())) {
+    return url
+  }
+  return `${url}${url.includes('?') ? '&' : '?'}proxy=1`
+}
+
 export function yandexEmbedUrl(trackId: string, albumId?: string) {
   if (albumId) return `https://music.yandex.ru/iframe/#track/${trackId}/${albumId}`
   return `https://music.yandex.ru/iframe/#track/${trackId}`
