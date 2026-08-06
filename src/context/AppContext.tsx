@@ -11,6 +11,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import {
   apiCheckUpload,
+  apiFetchRadar,
   apiLogin,
   apiRegister,
   apiMe,
@@ -597,13 +598,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
           blocked,
         )
       } else {
-        batch = await fetchYandexRadarTracks(
-          filters.popularity,
-          filters.genres,
-          count,
-          seenTrackIdsRef.current,
-          blocked,
-        )
+        try {
+          batch = await apiFetchRadar(
+            {
+              tier: filters.popularity,
+              genres: filters.genres,
+              limit: count,
+              excludeIds: [...seenTrackIdsRef.current],
+            },
+            authTokenRef.current,
+          )
+        } catch (apiErr) {
+          console.warn('radar API failed, fallback to client', apiErr)
+          batch = await fetchYandexRadarTracks(
+            filters.popularity,
+            filters.genres,
+            count,
+            seenTrackIdsRef.current,
+            blocked,
+          )
+        }
       }
 
       return filterBlockedTracks(batch, login)

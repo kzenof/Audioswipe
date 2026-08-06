@@ -207,3 +207,33 @@ export async function apiUpdateProfile(
     }),
   )
 }
+
+export async function apiFetchRadar(
+  params: {
+    tier: import('../types').PopularityTier
+    genres: import('../types').GenreTag[]
+    limit?: number
+    excludeIds?: string[]
+  },
+  token?: string | null,
+) {
+  const q = new URLSearchParams()
+  q.set('tier', params.tier)
+  if (params.genres.length) q.set('genres', params.genres.join(','))
+  q.set('limit', String(params.limit ?? 5))
+  if (params.excludeIds?.length) q.set('exclude', params.excludeIds.join(','))
+
+  const headers: Record<string, string> = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const res = await apiFetch(`${API_BASE}/radar?${q}`, { headers })
+  const data = (await res.json()) as {
+    success?: boolean
+    tracks?: import('../types').Track[]
+    error?: string
+  }
+  if (!res.ok || !data.success) {
+    throw new Error(data.error ?? `HTTP ${res.status}`)
+  }
+  return data.tracks ?? []
+}

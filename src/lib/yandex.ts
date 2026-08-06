@@ -261,7 +261,15 @@ export function yandexStreamUrl(trackId: string) {
   if (isYcFunctionsDirect(base)) {
     return `${base}?trackId=${encodeURIComponent(trackId)}`
   }
-  return `${base}/ym-stream/${encodeURIComponent(trackId)}`
+  if (base) {
+    return `${base}/ym-stream/${encodeURIComponent(trackId)}`
+  }
+  if (import.meta.env.DEV) {
+    return `/ym-stream/${encodeURIComponent(trackId)}`
+  }
+  const apiBase =
+    import.meta.env.VITE_API_URL ?? 'https://audioswipe.onrender.com/api'
+  return `${apiBase.replace(/\/api$/, '')}/ym-stream/${encodeURIComponent(trackId)}`
 }
 
 export function yandexEmbedUrl(trackId: string, albumId?: string) {

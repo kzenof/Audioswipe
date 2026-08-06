@@ -8,6 +8,7 @@ import {
   publicUser,
   registerUser,
   requireAuth,
+  authFromHeader,
 } from './auth.js'
 import { listUsers, mapAdminUser, requireAdmin, setCanUpload } from './admin.js'
 import { addToBlacklist, listBlacklist } from './blacklist.js'
@@ -27,6 +28,12 @@ import {
   query,
 } from './db.js'
 import { handleYmStream, registerYmApiProxy } from './yandexProxy.js'
+import {
+  getRadarTracks,
+  normalizeRadarTier,
+  parseExclude,
+  parseGenres,
+} from './radar.js'
 
 const app = express()
 
@@ -326,6 +333,37 @@ app.patch('/api/users/me/profile', async (req, res) => {
     }
     console.error(e)
     res.status(500).json({ error: 'Ошибка сервера' })
+  }
+})
+
+app.get('/api/radar', async (req, res) => {
+  try {
+    const auth = authFromHeader(req.headers.authorization)
+    const tier = normalizeRadarTier(req.query.tier ?? req.query.bucket)
+    const genres = parseGenres(req.query.genres ?? req.query.genre)
+    const limit = Math.min(Math.max(Number(req.query.limit ?? 5) || 5, 1), 20)
+    const excludeIds = parseExclude(req.query.exclude ?? req.query.excludeIds)
+
+    const result = await getRadarTracks({
+      userId: auth?.userId ?? null,
+      tier,
+      genres,
+      limit,
+      excludeIds,
+    })
+
+    if (!result.success) {
+      res.status(
+        result.error.includes('YANDEX') ? 503 : 502,
+      ).json(result)
+      return
+    }
+
+    res.json(result)
+  } catch (e) {
+    console.error('GET /api/radar', e)
+    const msg = e instanceof Error ? e.message : 'Radar error'
+    res.status(500).json({ success: false, error: msg })
   }
 })
 
