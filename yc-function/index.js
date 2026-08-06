@@ -96,12 +96,30 @@ function signedQs(trackId) {
 }
 
 async function resolveDirectUrl(trackId) {
-  const qs = signedQs(trackId)
-  const infoRes = await fetch(
-    `https://api.music.yandex.net/tracks/${trackId}/download-info?${qs}`,
-    { headers: ymHeaders() },
-  )
-  if (!infoRes.ok) throw new Error(`download-info ${infoRes.status}`)
+  if (!/^\d+$/.test(trackId)) {
+    throw new Error(`invalid trackId "${trackId}" — нужен числовой id`)
+  }
+  if (!(process.env.YANDEX_MUSIC_TOKEN || '').trim()) {
+    throw new Error('YANDEX_MUSIC_TOKEN not set on function')
+  }
+
+  const urls = [
+    `https://api.music.yandex.net/tracks/${trackId}/download-info`,
+    `https://api.music.yandex.net/tracks/${trackId}/download-info?${signedQs(trackId)}`,
+  ]
+  let infoRes = null
+  let lastBody = ''
+  for (const url of urls) {
+    infoRes = await fetch(url, { headers: ymHeaders() })
+    if (infoRes.ok) break
+    lastBody = await infoRes.text().catch(() => '')
+  }
+  if (!infoRes || !infoRes.ok) {
+    const status = infoRes ? infoRes.status : 0
+    if (status === 451) throw new Error('yandex_geo_blocked (451)')
+    const snippet = lastBody.slice(0, 160).replace(/\s+/g, ' ')
+    throw new Error(`download-info ${status}${snippet ? `: ${snippet}` : ''}`)
+  }
   const infoJson = await infoRes.json()
   if (infoJson.result && !Array.isArray(infoJson.result)) {
     const err = infoJson.result
@@ -119,6 +137,28 @@ async function resolveDirectUrl(trackId) {
   const meta = await metaRes.json()
   if (!meta.host || !meta.path || !meta.ts || !meta.s) throw new Error('bad storage meta')
   return buildMp3Url(meta)
+}
+
+async function proxyMp3(direct, event) {
+  const range =
+    (event.headers && (event.headers.range || event.headers.Range)) ||
+    undefined
+  const upstream = await fetch(direct, {
+    headers: range ? { Range: String(range) } : undefined,
+  })
+  const pass = ['content-type', 'content-length', 'accept-ranges', 'content-range', 'cache-control']
+  const headers = { ...CORS }
+  for (const h of pass) {
+    const v = upstream.headers.get(h)
+    if (v) headers[h] = v
+  }
+  const buf = Buffer.from(await upstream.arrayBuffer())
+  return {
+    statusCode: upstream.status,
+    headers,
+    body: buf.toString('base64'),
+    isBase64Encoded: true,
+  }
 }
 
 async function proxyYmApi(ymPath, query) {
@@ -171,7 +211,11 @@ module.exports.handler = async function handler(event) {
   }
   if (query.trackId) {
     try {
-      return redirect(await resolveDirectUrl(String(query.trackId)))
+      const direct = await resolveDirectUrl(String(query.trackId))
+      if (query.proxy === '1') {
+        return proxyMp3(direct, event)
+      }
+      return redirect(direct)
     } catch (e) {
       return json(502, {
         error: 'yandex_stream_failed',
@@ -202,6 +246,9 @@ module.exports.handler = async function handler(event) {
   if (streamMatch) {
     try {
       const direct = await resolveDirectUrl(decodeURIComponent(streamMatch[1]))
+      if (query.proxy === '1') {
+        return proxyMp3(direct, event)
+      }
       return redirect(direct)
     } catch (e) {
       return json(502, {

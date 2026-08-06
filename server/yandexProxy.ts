@@ -49,13 +49,31 @@ function signedDownloadParams(trackId: string) {
 }
 
 async function resolveDirectUrl(trackId: string): Promise<string> {
-  const qs = signedDownloadParams(trackId)
-  const infoRes = await fetch(
-    `https://api.music.yandex.net/tracks/${trackId}/download-info?${qs}`,
-    { headers: ymHeaders() },
-  )
-  if (!infoRes.ok) {
-    throw new Error(`download-info ${infoRes.status}`)
+  if (!/^\d+$/.test(trackId)) {
+    throw new Error(`invalid trackId "${trackId}" — нужен числовой id трека Яндекса`)
+  }
+  if (!process.env.YANDEX_MUSIC_TOKEN?.trim()) {
+    throw new Error('YANDEX_MUSIC_TOKEN not set on server')
+  }
+
+  const urls = [
+    `https://api.music.yandex.net/tracks/${trackId}/download-info`,
+    `https://api.music.yandex.net/tracks/${trackId}/download-info?${signedDownloadParams(trackId)}`,
+  ]
+  let infoRes: Response | null = null
+  let lastBody = ''
+  for (const url of urls) {
+    infoRes = await fetch(url, { headers: ymHeaders() })
+    if (infoRes.ok) break
+    lastBody = await infoRes.text().catch(() => '')
+  }
+  if (!infoRes?.ok) {
+    const status = infoRes?.status ?? 0
+    if (status === 451) {
+      throw new Error('yandex_geo_blocked (451) — хостинг вне РФ, нужен VITE_YM_BASE на Yandex Cloud')
+    }
+    const snippet = lastBody.slice(0, 160).replace(/\s+/g, ' ')
+    throw new Error(`download-info ${status}${snippet ? `: ${snippet}` : ''}`)
   }
   const infoJson = (await infoRes.json()) as {
     result?: DownloadInfoItem[] | { name?: string; message?: string }
@@ -93,6 +111,16 @@ async function cachedDirectUrl(trackId: string) {
   const url = await resolveDirectUrl(trackId)
   urlCache.set(trackId, { url, at: Date.now() })
   return url
+}
+
+/** GET /api/ym-health — есть ли токен на сервере (без утечки значения). */
+export function registerYmHealth(app: Express) {
+  app.get('/api/ym-health', (_req, res) => {
+    res.json({
+      ok: true,
+      hasToken: Boolean(process.env.YANDEX_MUSIC_TOKEN?.trim()),
+    })
+  })
 }
 
 /** Прокси JSON API Яндекс Музыки (обход CORS на проде). */
@@ -169,7 +197,7 @@ export async function handleYmStream(req: Request, res: Response) {
       error: 'yandex_stream_failed',
       message,
       hint: needsToken
-        ? 'Яндекс вернул no-rights: задай YANDEX_MUSIC_TOKEN (OAuth) в env Vercel'
+        ? 'Яндекс вернул no-rights: задай YANDEX_MUSIC_TOKEN (OAuth) в env Render и перезапусти сервис'
         : undefined,
     })
   }

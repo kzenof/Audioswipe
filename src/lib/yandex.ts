@@ -274,10 +274,11 @@ export function yandexStreamUrl(trackId: string) {
 
 /** Стрим через наш бэкенд (proxy=1) — иначе <audio> не играет 302 на storage.yandex.net */
 export function yandexBlindStreamUrl(trackId: string) {
-  const url = yandexStreamUrl(trackId)
-  if (isYcFunctionsDirect(ymProxyBase())) {
-    return url
+  const base = ymProxyBase()
+  if (isYcFunctionsDirect(base)) {
+    return `${base}?trackId=${encodeURIComponent(trackId)}&proxy=1`
   }
+  const url = yandexStreamUrl(trackId)
   return `${url}${url.includes('?') ? '&' : '?'}proxy=1`
 }
 

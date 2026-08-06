@@ -27,7 +27,7 @@ import {
   getLastDbError,
   query,
 } from './db.js'
-import { handleYmStream, registerYmApiProxy } from './yandexProxy.js'
+import { handleYmStream, registerYmApiProxy, registerYmHealth } from './yandexProxy.js'
 import {
   getRadarTracks,
   normalizeRadarTier,
@@ -50,6 +50,7 @@ app.use(
 app.use(express.json())
 
 registerYmApiProxy(app)
+registerYmHealth(app)
 app.get('/ym-stream/:trackId', handleYmStream)
 
 app.get('/', (_req, res) => {

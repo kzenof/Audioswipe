@@ -49,13 +49,28 @@ function signedDownloadParams(trackId: string) {
 }
 
 async function resolveDirectUrl(trackId: string): Promise<string> {
-  const qs = signedDownloadParams(trackId)
-  const infoRes = await fetch(
-    `https://api.music.yandex.net/tracks/${trackId}/download-info?${qs}`,
-    { headers: ymHeaders() },
-  )
-  if (!infoRes.ok) {
-    throw new Error(`download-info ${infoRes.status}`)
+  if (!/^\d+$/.test(trackId)) {
+    throw new Error(`invalid trackId "${trackId}"`)
+  }
+  if (!process.env.YANDEX_MUSIC_TOKEN?.trim()) {
+    throw new Error('YANDEX_MUSIC_TOKEN not set')
+  }
+
+  const urls = [
+    `https://api.music.yandex.net/tracks/${trackId}/download-info`,
+    `https://api.music.yandex.net/tracks/${trackId}/download-info?${signedDownloadParams(trackId)}`,
+  ]
+  let infoRes: Response | null = null
+  let lastBody = ''
+  for (const url of urls) {
+    infoRes = await fetch(url, { headers: ymHeaders() })
+    if (infoRes.ok) break
+    lastBody = await infoRes.text().catch(() => '')
+  }
+  if (!infoRes?.ok) {
+    const status = infoRes?.status ?? 0
+    const snippet = lastBody.slice(0, 160).replace(/\s+/g, ' ')
+    throw new Error(`download-info ${status}${snippet ? `: ${snippet}` : ''}`)
   }
   const infoJson = (await infoRes.json()) as {
     result?: DownloadInfoItem[] | { name?: string; message?: string }

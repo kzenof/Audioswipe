@@ -45,6 +45,7 @@ export function ListenerSpace() {
   const timerRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hiddenAudioRef = useRef<HTMLAudioElement | null>(null)
+  const blindBlobRef = useRef<string | null>(null)
 
   const stopTimers = () => {
     if (timerRef.current) {
@@ -64,6 +65,10 @@ export function ListenerSpace() {
       ha.pause()
       ha.removeAttribute('src')
       ha.load()
+    }
+    if (blindBlobRef.current) {
+      URL.revokeObjectURL(blindBlobRef.current)
+      blindBlobRef.current = null
     }
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = null
@@ -106,12 +111,16 @@ export function ListenerSpace() {
       listenerPhase === 'roulette' || listenerPhase === 'feedback'
 
     if (blind && playing) {
-      navigator.mediaSession.metadata = new MediaMetadata({
+      const meta = new MediaMetadata({
         title: 'Слепое прослушивание',
         artist: 'Audioswipe',
         album: 'Радар',
       })
-      return
+      navigator.mediaSession.metadata = meta
+      const id = window.setInterval(() => {
+        navigator.mediaSession.metadata = meta
+      }, 1500)
+      return () => window.clearInterval(id)
     }
 
     if (listenerPhase === 'reveal' && currentTrack) {
@@ -174,12 +183,33 @@ export function ListenerSpace() {
     const playHidden = async (src: string) => {
       const el = hiddenAudioRef.current
       if (!el) return false
-      el.crossOrigin = 'anonymous'
-      el.src = src
-      el.currentTime = 0
-      el.onloadedmetadata = applyBlindSession
-      el.onplaying = applyBlindSession
       try {
+        const res = await fetch(src)
+        const ct = res.headers.get('content-type') || ''
+        if (!res.ok || ct.includes('application/json')) {
+          const err = ct.includes('application/json')
+            ? ((await res.json().catch(() => null)) as { message?: string; hint?: string } | null)
+            : null
+          if (!cancelled) {
+            setStreamError(
+              err?.message
+                ? `${err.message}${err.hint ? `. ${err.hint}` : ''}`
+                : `Стрим недоступен (${res.status}). Проверь YANDEX_MUSIC_TOKEN на Render.`,
+            )
+          }
+          return false
+        }
+        if (blindBlobRef.current) {
+          URL.revokeObjectURL(blindBlobRef.current)
+        }
+        const blob = await res.blob()
+        const blobUrl = URL.createObjectURL(blob)
+        blindBlobRef.current = blobUrl
+        el.crossOrigin = 'anonymous'
+        el.src = blobUrl
+        el.currentTime = 0
+        el.onloadedmetadata = applyBlindSession
+        el.onplaying = applyBlindSession
         await el.play()
         if (cancelled) {
           el.pause()
@@ -189,6 +219,11 @@ export function ListenerSpace() {
         bindAudioProgress(el)
         return true
       } catch {
+        if (!cancelled) {
+          setStreamError(
+            'Не удалось запустить превью. Проверь YANDEX_MUSIC_TOKEN на Render и перезапусти сервис.',
+          )
+        }
         return false
       }
     }
@@ -202,9 +237,6 @@ export function ListenerSpace() {
         )
         if (!ok && !cancelled) {
           setPlaying(false)
-          setStreamError(
-            'Не удалось запустить превью. Проверь YANDEX_MUSIC_TOKEN на Render и перезапусти сервис.',
-          )
         }
         return
       }
