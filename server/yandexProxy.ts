@@ -1,7 +1,7 @@
 import { createHash, createHmac } from 'node:crypto'
 import type { Express, Request, Response } from 'express'
 
-const YM_CLIENT = 'YandexMusicDesktop/24023621'
+const YM_CLIENT = process.env.YANDEX_CLIENT ?? 'YandexMusicAndroid/24023231'
 const STREAM_SIGN_SECRET = 'p93jhgh689SBReK6ghtw62'
 
 interface DownloadInfoItem {
@@ -19,13 +19,15 @@ interface StorageMeta {
 }
 
 function ymHeaders(): Record<string, string> {
+  const raw =
+    process.env.YANDEX_MUSIC_TOKEN?.trim() ?? process.env.YANDEX_TOKEN?.trim()
+  const token = raw?.startsWith('OAuth ') ? raw.slice(6).trim() : raw
   const headers: Record<string, string> = {
     'X-Yandex-Music-Client': YM_CLIENT,
     Accept: 'application/json',
   }
-  const token = process.env.YANDEX_MUSIC_TOKEN?.trim()
   if (token) {
-    headers.Authorization = token.startsWith('OAuth ') ? token : `OAuth ${token}`
+    headers.Authorization = `OAuth ${token}`
   }
   return headers
 }
@@ -58,14 +60,21 @@ async function resolveDirectUrl(trackId: string): Promise<string> {
 
   const urls = [
     `https://api.music.yandex.net/tracks/${trackId}/download-info`,
-    `https://api.music.yandex.net/tracks/${trackId}/download-info?${signedDownloadParams(trackId)}`,
   ]
+  // Подпись нужна только для full-stream; для превью хватает запроса без can_use_streaming
   let infoRes: Response | null = null
   let lastBody = ''
   for (const url of urls) {
     infoRes = await fetch(url, { headers: ymHeaders() })
     if (infoRes.ok) break
     lastBody = await infoRes.text().catch(() => '')
+    // no-rights без подписи — пробуем signed (иногда помогает на Plus)
+    if (infoRes.status === 403 && /no-rights|not-allowed/i.test(lastBody)) {
+      const signedUrl = `https://api.music.yandex.net/tracks/${trackId}/download-info?${signedDownloadParams(trackId)}`
+      infoRes = await fetch(signedUrl, { headers: ymHeaders() })
+      if (infoRes.ok) break
+      lastBody = await infoRes.text().catch(() => lastBody)
+    }
   }
   if (!infoRes?.ok) {
     const status = infoRes?.status ?? 0
@@ -113,12 +122,60 @@ async function cachedDirectUrl(trackId: string) {
   return url
 }
 
+function ymProxyBaseUrl() {
+  return (
+    process.env.YM_PROXY_BASE?.trim() ??
+    process.env.VITE_YM_BASE?.trim() ??
+    ''
+  ).replace(/\/$/, '')
+}
+
+function externalStreamUrl(trackId: string) {
+  const base = ymProxyBaseUrl()
+  if (!base) return null
+  if (/functions\.yandexcloud\.net/i.test(base)) {
+    return `${base}?trackId=${encodeURIComponent(trackId)}&proxy=1`
+  }
+  return `${base}/ym-stream/${encodeURIComponent(trackId)}?proxy=1`
+}
+
+async function proxyStreamResponse(
+  upstreamUrl: string,
+  req: Request,
+  res: Response,
+): Promise<boolean> {
+  const range = req.headers.range
+  const upstream = await fetch(upstreamUrl, {
+    headers: range ? { Range: String(range) } : undefined,
+  })
+  const ct = upstream.headers.get('content-type') || ''
+  if (!upstream.ok || ct.includes('application/json')) {
+    return false
+  }
+  res.status(upstream.status)
+  for (const h of [
+    'content-type',
+    'content-length',
+    'accept-ranges',
+    'content-range',
+    'cache-control',
+  ]) {
+    const v = upstream.headers.get(h)
+    if (v) res.setHeader(h, v)
+  }
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  const buf = Buffer.from(await upstream.arrayBuffer())
+  res.send(buf)
+  return true
+}
+
 /** GET /api/ym-health — есть ли токен на сервере (без утечки значения). */
 export function registerYmHealth(app: Express) {
   app.get('/api/ym-health', (_req, res) => {
     res.json({
       ok: true,
       hasToken: Boolean(process.env.YANDEX_MUSIC_TOKEN?.trim()),
+      ymProxy: Boolean(ymProxyBaseUrl()),
     })
   })
 }
@@ -192,13 +249,25 @@ export async function handleYmStream(req: Request, res: Response) {
     res.redirect(302, direct)
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    const needsToken = /no-rights|not-allowed|Unauthorized/i.test(message)
+    const hasToken = Boolean(
+      process.env.YANDEX_MUSIC_TOKEN?.trim() ?? process.env.YANDEX_TOKEN?.trim(),
+    )
+    const proxyUrl = externalStreamUrl(trackId)
+    if (req.query.proxy === '1' && proxyUrl) {
+      const ok = await proxyStreamResponse(proxyUrl, req, res)
+      if (ok) return
+    }
+    const noRights = /no-rights|not-allowed/i.test(message)
     res.status(502).json({
       error: 'yandex_stream_failed',
       message,
-      hint: needsToken
-        ? 'Яндекс вернул no-rights: задай YANDEX_MUSIC_TOKEN (OAuth) в Vercel Environment Variables и сделай Redeploy'
-        : undefined,
+      hint: noRights
+        ? hasToken
+          ? 'Токен есть, но Яндекс отклонил стрим. Нужен аккаунт с Яндекс Плюс или прокси в РФ: задай YM_PROXY_BASE (Yandex Cloud) в Vercel Environment Variables.'
+          : 'Задай YANDEX_MUSIC_TOKEN (OAuth) в Vercel Environment Variables и сделай Redeploy.'
+        : proxyUrl
+          ? 'Прямой стрим с Vercel не прошёл — проверь YM_PROXY_BASE и токен на Yandex Cloud Function.'
+          : undefined,
     })
   }
 }

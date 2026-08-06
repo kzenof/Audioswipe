@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite'
 import { createHash, createHmac } from 'node:crypto'
 
-const YM_CLIENT = 'YandexMusicDesktop/24023621'
+const YM_CLIENT = process.env.YANDEX_CLIENT ?? 'YandexMusicAndroid/24023231'
 const STREAM_SIGN_SECRET = 'p93jhgh689SBReK6ghtw62'
 
 interface DownloadInfoItem {
@@ -23,9 +23,10 @@ function ymHeaders(): Record<string, string> {
     'X-Yandex-Music-Client': YM_CLIENT,
     Accept: 'application/json',
   }
-  const token = process.env.YANDEX_MUSIC_TOKEN?.trim()
+  const raw = process.env.YANDEX_MUSIC_TOKEN?.trim()
+  const token = raw?.startsWith('OAuth ') ? raw.slice(6).trim() : raw
   if (token) {
-    headers.Authorization = token.startsWith('OAuth ') ? token : `OAuth ${token}`
+    headers.Authorization = `OAuth ${token}`
   }
   return headers
 }

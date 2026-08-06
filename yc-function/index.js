@@ -15,7 +15,7 @@
 
 const crypto = require('crypto')
 
-const YM_CLIENT = 'YandexMusicDesktop/24023621'
+const YM_CLIENT = process.env.YANDEX_CLIENT || 'YandexMusicAndroid/24023231'
 const STREAM_SIGN_SECRET = 'p93jhgh689SBReK6ghtw62'
 
 const CORS = {
@@ -29,9 +29,10 @@ function ymHeaders() {
     'X-Yandex-Music-Client': YM_CLIENT,
     Accept: 'application/json',
   }
-  const token = (process.env.YANDEX_MUSIC_TOKEN || '').trim()
-  if (token) {
-    headers.Authorization = token.startsWith('OAuth ') ? token : `OAuth ${token}`
+  const token = (process.env.YANDEX_MUSIC_TOKEN || process.env.YANDEX_TOKEN || '').trim()
+  const clean = token.startsWith('OAuth ') ? token.slice(6).trim() : token
+  if (clean) {
+    headers.Authorization = `OAuth ${clean}`
   }
   return headers
 }
