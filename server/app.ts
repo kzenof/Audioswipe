@@ -74,6 +74,7 @@ app.get('/api/health', async (_req, res) => {
     ok: true,
     service: 'audioswipe-api',
     db,
+    ymToken: Boolean(process.env.YANDEX_MUSIC_TOKEN?.trim()),
     ...(db ? {} : { hint: getLastDbError() ?? 'DB connection failed' }),
   })
 })

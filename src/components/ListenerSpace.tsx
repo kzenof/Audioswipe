@@ -194,7 +194,7 @@ export function ListenerSpace() {
             setStreamError(
               err?.message
                 ? `${err.message}${err.hint ? `. ${err.hint}` : ''}`
-                : `Стрим недоступен (${res.status}). Проверь YANDEX_MUSIC_TOKEN на Render.`,
+                : `Стрим недоступен (${res.status}). Проверь YANDEX_MUSIC_TOKEN в Vercel → Settings → Environment Variables.`,
             )
           }
           return false
@@ -221,7 +221,7 @@ export function ListenerSpace() {
       } catch {
         if (!cancelled) {
           setStreamError(
-            'Не удалось запустить превью. Проверь YANDEX_MUSIC_TOKEN на Render и перезапусти сервис.',
+            'Не удалось запустить превью. Задай YANDEX_MUSIC_TOKEN в Vercel и сделай Redeploy.',
           )
         }
         return false

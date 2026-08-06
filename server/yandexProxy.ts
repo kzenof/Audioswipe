@@ -197,7 +197,7 @@ export async function handleYmStream(req: Request, res: Response) {
       error: 'yandex_stream_failed',
       message,
       hint: needsToken
-        ? 'Яндекс вернул no-rights: задай YANDEX_MUSIC_TOKEN (OAuth) в env Render и перезапусти сервис'
+        ? 'Яндекс вернул no-rights: задай YANDEX_MUSIC_TOKEN (OAuth) в Vercel Environment Variables и сделай Redeploy'
         : undefined,
     })
   }

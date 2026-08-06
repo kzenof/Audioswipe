@@ -264,12 +264,8 @@ export function yandexStreamUrl(trackId: string) {
   if (base) {
     return `${base}/ym-stream/${encodeURIComponent(trackId)}`
   }
-  if (import.meta.env.DEV) {
-    return `/ym-stream/${encodeURIComponent(trackId)}`
-  }
-  const apiBase =
-    import.meta.env.VITE_API_URL ?? 'https://audioswipe.onrender.com/api'
-  return `${apiBase.replace(/\/api$/, '')}/ym-stream/${encodeURIComponent(trackId)}`
+  // Тот же домен (Vercel: rewrite /ym-stream → api/index)
+  return `/ym-stream/${encodeURIComponent(trackId)}`
 }
 
 /** Стрим через наш бэкенд (proxy=1) — иначе <audio> не играет 302 на storage.yandex.net */

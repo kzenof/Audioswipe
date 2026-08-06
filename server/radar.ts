@@ -274,7 +274,7 @@ export async function getRadarTracks(input: {
   if (!token) {
     return {
       success: false,
-      error: 'YANDEX_MUSIC_TOKEN не задан на сервере (Render → Environment)',
+      error: 'YANDEX_MUSIC_TOKEN не задан на сервере (Vercel → Environment Variables)',
     }
   }
 
